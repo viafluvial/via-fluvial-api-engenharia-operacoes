@@ -1,0 +1,239 @@
+Você é um engenheiro de software sênior.
+
+Ler os três arquivos de referência abaixo (Dockerfile, Docker Compose e Makefile), extrair o padrão estrutural usado neles e aplicar esse mesmo padrão no meu projeto atual, usando exclusivamente os parâmetros reais do meu projeto.
+
+REGRA PRINCIPAL (OBRIGATÓRIA)
+
+    Reaproveitar apenas o modelo/forma dos arquivos de referência (estágios, fluxo de build, organização de serviços, variáveis e comandos operacionais).
+    NÃO copiar nomes, portas, banco, usuário, artifactId, container_name e valores literais do exemplo.
+    Substituir tudo pelos parâmetros reais do meu projeto.
+
+EXEMPLOS DE REFERÊNCIA (OBRIGATÓRIOS PARA EXTRAIR O PADRÃO)
+
+1) Dockerfile de referência:
+
+# syntax=docker/dockerfile:1
+
+FROM eclipse-temurin:21-jdk AS build
+
+WORKDIR /workspace
+
+COPY mvnw pom.xml ./
+COPY .mvn .mvn
+
+RUN chmod +x mvnw \
+  && ./mvnw -B -ntp -DskipTests dependency:go-offline
+
+COPY src src
+
+RUN ./mvnw -B -ntp -DskipTests clean package
+
+FROM eclipse-temurin:21-jre
+
+WORKDIR /app
+
+ENV SPRING_PROFILES_ACTIVE=dsv
+ENV JAVA_OPTS=""
+
+COPY --from=build /workspace/target/<dominio>-*.jar /app/app.jar
+
+EXPOSE 8080
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dspring.profiles.active=$SPRING_PROFILES_ACTIVE -jar /app/app.jar"]
+
+2) Docker Compose de referência:
+
+services:
+  postgres-<dominio>:
+    image: postgres:16-alpine
+    container_name: postgres-<dominio>
+    environment:
+      POSTGRES_DB: ${DB_NAME:-db-<dominio>}
+      POSTGRES_USER: ${DB_USERNAME:-<dominio>_app}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-<dominio>_app}
+    ports:
+      - "<port>:5432"
+    volumes:
+      - postgres_<dominio>_data:/var/lib/postgresql/data
+
+  api-<dominio>:
+    build:
+      context: .
+    container_name: api-<dominio>
+    depends_on:
+      - postgres-<dominio>
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dsv}
+      DB_HOST: postgres-<dominio>
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-db-<dominio>}
+      DB_USERNAME: ${DB_USERNAME:-<dominio>_app}
+      DB_PASSWORD: ${DB_PASSWORD:-<dominio>_app}
+      SECURITY_MODE: ${SECURITY_MODE:-dev}
+      CRYPTO_MASTER_KEY_BASE64: ${CRYPTO_MASTER_KEY_BASE64:-/rqlofxNe3Jq3xby9c38XcciGaax6uhKLCQ/13U/9ag=}
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_<dominio>_data:
+
+3) Makefile de referência (completo):
+
+.PHONY: help generate run test build verify package clean up down restart logs ps stop rm \
+        docker-build docker-rebuild docker-pull db-shell app-shell \
+        health swagger openapi wait
+
+help:
+    @echo "Comandos disponíveis:"
+    @echo "  make generate       - Gera fontes OpenAPI"
+    @echo "  make run            - Executa app local (profile dsv)"
+    @echo "  make test           - Executa testes"
+    @echo "  make build          - Build completo com verify"
+    @echo "  make package        - Empacota jar sem testes"
+    @echo "  make clean          - Limpa artefatos Maven"
+    @echo "  make up             - Sobe stack Docker Compose"
+    @echo "  make down           - Derruba stack Docker Compose"
+    @echo "  make restart        - Reinicia stack"
+    @echo "  make logs           - Logs da stack"
+    @echo "  make ps             - Status dos containers"
+    @echo "  make health         - Testa actuator health"
+    @echo "  make swagger        - Testa Swagger UI"
+    @echo "  make openapi        - Testa OpenAPI docs"
+    @echo "  make db-shell       - Shell no Postgres"
+    @echo "  make app-shell      - Shell no container da API"
+
+generate:
+    ./mvnw -q -DskipTests generate-sources
+
+run:
+    ./mvnw -P dsv spring-boot:run
+
+test:
+    ./mvnw test
+
+build:
+    ./mvnw clean verify
+
+verify:
+    ./mvnw clean verify
+
+package:
+    ./mvnw -DskipTests clean package
+
+clean:
+    ./mvnw clean
+
+up:
+    docker compose up -d --build
+
+down:
+    docker compose down
+
+restart: down up
+
+logs:
+    docker compose logs -f --tail=200
+
+ps:
+    docker compose ps
+
+stop:
+    docker compose stop
+
+rm:
+    docker compose rm -f
+
+docker-build:
+    docker compose build
+
+docker-rebuild:
+    docker compose build --no-cache
+
+docker-pull:
+    docker compose pull
+
+db-shell:
+    docker compose exec postgres-identidade-autenticacao psql -U $${DB_USERNAME:-identidade-autenticacao_app} -d $${DB_NAME:-db-identidade-autenticacao}
+
+app-shell:
+    docker compose exec api-identidade-autenticacao sh
+
+health:
+    curl -fsS http://localhost:8080/actuator/health || (echo "healthcheck falhou" && exit 1)
+
+swagger:
+    curl -I -fsS http://localhost:8080/swagger-ui/index.html >/dev/null || (echo "swagger indisponível" && exit 1)
+
+openapi:
+    curl -fsS http://localhost:8080/v3/api-docs >/dev/null || (echo "openapi indisponível" && exit 1)
+
+wait:
+    @echo "Aguardando aplicação ficar saudável..."
+    @for i in $$(seq 1 60); do \
+      if curl -fsS http://localhost:8080/actuator/health >/dev/null 2>&1; then \
+        echo "Aplicação saudável"; exit 0; \
+      fi; \
+      sleep 2; \
+    done; \
+    echo "Timeout aguardando health"; exit 1
+
+ENTRADAS QUE VOCÊ DEVE USAR NO PROJETO ALVO
+
+    Dockerfile, docker-compose e Makefile de referência (acima)
+    pom.xml do projeto alvo
+    application.yml e application-{profile}.yml
+    Variáveis de ambiente esperadas pela aplicação
+    Nome do serviço, nome do banco, schema, usuário, portas e profile padrão do projeto alvo
+
+O QUE VOCÊ DEVE FAZER
+
+    1. Extrair o padrão estrutural dos exemplos.
+    2. Identificar os parâmetros reais do projeto alvo.
+    3. Gerar Dockerfile final, docker-compose final e Makefile final do projeto alvo.
+    4. Garantir consistência entre compose, make e aplicação:
+        Nomes de variáveis exatamente como a aplicação espera
+        Host e porta de banco corretos
+        Profile padrão coerente
+        Nome do JAR compatível com o artifact gerado
+        Alvos do Makefile usando nomes reais dos serviços no compose
+    5. Se faltar algum dado no projeto alvo, inferir pelo padrão; se não for possível inferir com segurança, sinalizar objetivamente.
+
+REQUISITOS TÉCNICOS MÍNIMOS
+
+    Dockerfile multi-stage (build com JDK 21 e runtime com JRE 21)
+    Maven Wrapper com etapa offline e package sem testes
+    Runtime com SPRING_PROFILES_ACTIVE e JAVA_OPTS
+    Compose com serviço API + PostgreSQL e volume nomeado
+    Makefile completo com targets de:
+        build/test/run/generate/package/clean
+        up/down/restart/logs/ps
+        checks de health/swagger/openapi
+        shell da API e do banco
+    Variáveis de ambiente alinhadas ao que o projeto realmente lê
+
+RESTRIÇÕES
+
+    Não alterar regra funcional da aplicação
+    Não criar serviços extras não solicitados
+    Não hardcode de segredo fora de variável
+    Não manter valores literais do exemplo quando divergirem do projeto alvo
+
+FORMATO DA RESPOSTA
+
+    1) Resumo do que foi aplicado
+    2) Dockerfile final
+    3) docker-compose final
+    4) Makefile final
+    5) Checklist de aderência:
+        Padrão estrutural replicado
+        Parâmetros reais aplicados
+        Consistência de variáveis validada
+        Portas e nomes validados
+        Comandos Makefile funcionais e coerentes com compose
+
+CRITÉRIO DE ACEITE
+
+    Arquivos finais seguem o padrão dos exemplos
+    Valores são do projeto alvo, não do exemplo
+    Docker compose sobe e API conecta no PostgreSQL usando as variáveis configuradas
+    Targets principais do Makefile executam com sucesso no projeto alvo

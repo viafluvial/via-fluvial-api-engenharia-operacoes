@@ -1,0 +1,6 @@
+spring:
+  flyway:
+    ignore-migration-patterns: ${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:*:missing}
+
+security:
+  mode: oauth2

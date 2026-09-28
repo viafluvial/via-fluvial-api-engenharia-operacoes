@@ -1,0 +1,252 @@
+# Central de Engenharia e Operacoes - Analise e roteiro de implementacao
+
+## Finalidade deste documento
+
+Este documento consolida a analise do workspace real da Plataforma VFA e define como executar os dois prompts de implementacao:
+
+1. `prompt-backend.txt` - criar a API agregadora de Engenharia e Operacoes;
+2. `prompt-frontend.txt` - criar a area dedicada no frontend administrativo.
+
+Execute primeiro o backend e somente depois o frontend. Ambos os prompts foram escritos para uso no GPT Codex dentro da raiz:
+
+`/home/elderson/workarea/workspace/vfa/plataforma-vfa`
+
+## 0. Documentos normativos e precedencia
+
+Antes de editar codigo, leia integralmente os documentos abaixo, todos na pasta `via-fluvial-api-engenharia-operacoes/docs/`:
+
+1. `engenharia-operacoes.txt` - identidade, dominio, conectividade e banco do microsservico;
+2. `padroes-projeto-java-spring-boot.txt` - arquitetura, stack, seguranca, testes e qualidade;
+3. `contrato-operacional-para-swagger-openapi.txt` - politica unica de base path e documentacao da API;
+4. `contrato-operacional-para-migrations-seeds.txt` - governanca Flyway, migrations e seeds;
+5. `contrato-operacional-para-dockerfile-docker-compose-makefile.txt` - empacotamento e operacao local;
+6. este `prompt.txt` - escopo, diagnostico e ordem de execucao;
+7. `prompt-backend.txt` e `prompt-frontend.txt` - instrucoes executaveis por camada.
+
+Os cinco primeiros documentos sao somente leitura e nao podem ser alterados durante a implementacao. Em caso de conflito, aplique a regra mais especifica nesta ordem:
+
+1. contratos operacionais especificos (OpenAPI, migrations/seeds e Docker/Compose/Makefile);
+2. identidade e parametros reais de `engenharia-operacoes.txt`;
+3. padroes gerais Java/Spring Boot;
+4. prompts de execucao.
+
+Decisoes de compatibilidade obrigatorias:
+
+- o runtime usa `server.servlet.context-path=/api/v1`, conforme o contrato OpenAPI; o valor `Context path da aplicacao: /` de `engenharia-operacoes.txt` deve ser interpretado como ausencia de um segundo prefixo alem do base path, nunca como autorizacao para expor a API sem `/api/v1`;
+- paths no OpenAPI e mappings de controllers nao repetem `/api/v1`;
+- o pacote Java fisico usa `br.com.viafluvial.engenhariaoperacoes`, pois hifen nao e valido em identificadores Java; o slug, banco, schema, containers e nomes operacionais preservam `engenharia-operacoes`;
+- porta local da API: `18020`; porta interna: `8080`;
+- banco: `db-engenharia-operacoes`; schema: `sc-engenharia-operacoes`; usuario dedicado: `engenharia-operacoes_app`. No modo shared DB local, o orquestrador raiz pode sobrescrever credenciais pelo usuario compartilhado real, sem mudar o default do compose dedicado;
+- OpenAPI estatico e runtime devem permanecer equivalentes: o contrato versionado e a fonte de geracao e deve ser publicado tambem em `src/main/resources/static/openapi/openapi.yaml`, com teste automatizado de paridade;
+- Flyway usa `V001-V099` para estrutura e `V101-V199` para seeds DSV; prefixo `S` e proibido; HML/PRD nao carregam seeds;
+- JPA usa obrigatoriamente `spring.jpa.hibernate.ddl-auto=validate` em todos os profiles.
+
+Se uma instrucao dos prompts divergir desses documentos, nao improvise nem altere o contrato protegido: aplique a precedencia acima, registre a decisao no README e valide o comportamento executavel.
+
+## 1. Diagnostico da proposta
+
+O texto original apresenta uma boa visao de produto e acerta em pontos importantes:
+
+- diferencia health de servico, dependencias e jornadas;
+- recomenda que o fallback nao seja feito livremente pelo navegador;
+- distingue falha de infraestrutura de erros 4xx e erros de negocio;
+- inclui auditoria, seguranca, historico, ambientes e diagnostico gateway versus backend;
+- propoe evolucao gradual para Prometheus, Grafana, Loki e OpenTelemetry.
+
+Entretanto, ele foi escrito sem observar o repositorio e precisa das seguintes correcoes.
+
+### 1.1. Quantidade real de APIs
+
+Existem 19 projetos Maven implementados:
+
+1. api-identidade-autenticacao - porta local 18001;
+2. api-perfis-usuarios - 18002;
+3. api-compliance - 18003;
+4. api-administracao - 18004;
+5. api-auditoria - 18005;
+6. api-embarcacoes - 18006;
+7. api-tripulacao - 18007;
+8. api-viagens - 18008;
+9. api-reservas - 18009;
+10. api-venda-ingressos - 18010;
+11. api-ticket-suporte - 18011;
+12. api-financeiro - 18012;
+13. api-operacoes-agencia - 18013;
+14. api-relatorios - 18014;
+15. api-notificacoes - 18015;
+16. api-suporte - 18016;
+17. api-rotas-portos - 18017;
+18. api-pagamentos - 18018;
+19. api-acervo-digital - 18019.
+
+`via-fluvial-api-engenharia-operacoes` existe, mas contem apenas `docs/`; ele sera o 20o projeto e deve usar, por padrao, a porta 18020.
+
+O `ALL_APIS` do Makefile ainda lista 18 servicos e nao inclui pagamentos. A implementacao deve corrigir os registries operacionais sem remover nenhum servico existente.
+
+### 1.2. Stack real e variacoes
+
+Os backends usam Java 21, Spring Boot 3.x, Maven Wrapper, Spring MVC, Spring Security, OAuth2 Resource Server, Actuator, PostgreSQL, Flyway e OpenAPI. Os projetos seguem, em graus diferentes, DDD, Clean Architecture ou arquitetura hexagonal com pacotes `domain`, `application`, `adapters` e `config`.
+
+Nao se deve fixar no prompt uma versao unica de Spring Boot para todos os projetos: ha variacao entre os POMs. O novo servico deve escolher a versao e o conjunto de plugins com base no projeto irmao mais atual e compativel, registrando a escolha no README.
+
+O frontend usa React 18, TypeScript, Vite 6, Vitest, Tailwind, componentes locais baseados em Radix, MUI e `lucide-react`. A aplicacao nao usa um roteador convencional para as areas principais; a navegacao atual e controlada por `AppView` e por `PlatformAdminDashboard`.
+
+### 1.3. Health e observabilidade ja existentes
+
+As APIs ja possuem Actuator em configuracoes que normalmente expõem `health`, `info`, `metrics` e `prometheus`, com base path tipico `/api/v1/actuator`. Existem perfis `dsv`, `hml` e `prd`, CORS configuravel, correlation ID e instrumentacao Micrometer/OpenTelemetry em varios servicos.
+
+A implementacao nao deve alterar 19 APIs apenas para implementar o MVP. Primeiro deve consumir os contratos existentes e tolerar diferencas de path de health por configuracao.
+
+### 1.4. Monitoramento frontend ja existente
+
+`via-fluvial-app/src/app/App.tsx` ja possui um painel flutuante de desenvolvimento que:
+
+- usa `getEnabledApiServices()`;
+- consulta health diretamente pelo navegador;
+- testa candidatos de Actuator;
+- mede latencia;
+- mostra UP/DOWN;
+- executa somente em `import.meta.env.DEV`.
+
+Esse painel e uma prova de conceito. A implementacao deve extrair/evoluir o comportamento para uma area dedicada de Engenharia dentro de `PlatformAdminDashboard`, usando a nova API agregadora como fonte confiavel. Nao deve criar um segundo monitor paralelo e manter duplicacao em `App.tsx`.
+
+### 1.5. Registro e roteamento de APIs ja existentes
+
+`via-fluvial-app/src/app/config/apiServices.ts` registra as 19 APIs e diferencia:
+
+- `backendUrl` para acesso direto;
+- `gatewayUrl` para Gravitee;
+- `VIA_FLUVIAL_API_USE_GATEWAY` para o modo global;
+- `X-Gravitee-Api-Key` apenas no modo gateway;
+- configuracao de runtime via `window.__VIA_FLUVIAL_CONFIG__` com fallback para variaveis de build.
+
+A tela deve mostrar a configuracao efetiva sanitizada. Nunca deve renderizar API keys, tokens, segredos, senhas, JDBC URLs completas ou URLs internas que o usuario nao esteja autorizado a ver.
+
+### 1.6. Fallback
+
+O repositorio nao possui um fallback de producao Gateway -> backend direto implementado e seguro. Portanto:
+
+- o MVP nao deve implementar fallback no browser;
+- o MVP deve diagnosticar gateway e backend separadamente;
+- o estado laranja somente pode indicar uma contingencia declarada pela infraestrutura ou configuracao controlada, nunca uma troca silenciosa feita pelo frontend;
+- uma futura contingencia deve ocorrer em proxy/load balancer/segundo gateway/BFF interno, mantendo autenticacao, rate limit, auditoria e correlation ID;
+- 400, 401, 403, 404 e erros de negocio nunca acionam fallback;
+- somente falhas de conectividade, timeout, 502, 503 e 504 podem qualificar uma rota para avaliacao de contingencia.
+
+O script `via-fluvial-app/scripts/check-no-fallback-policy.js` deve continuar passando. Nao introduzir token fake nem actorId artificial.
+
+### 1.7. Banco compartilhado
+
+O desenvolvimento local usa PostgreSQL compartilhado na porta 15432, com um database e schema por microsservico. A nova API deve seguir o mesmo modelo:
+
+- database: `db-engenharia-operacoes`;
+- schema: `sc-engenharia-operacoes`;
+- usuario de aplicacao: o padrao seguro usado pelo shared DB;
+- migracoes Flyway proprias;
+- nenhuma conexao a um PostgreSQL exclusivo quando `USE_SHARED_DB=true`.
+
+### 1.8. Componentes que nao devem ser inventados
+
+Redis, Kubernetes, Docker Swarm, replicas, Gravitee Management API, certificados, GitHub Actions, rollback e metricas de Keycloak somente devem aparecer quando houver adaptador/configuracao real e credenciais fornecidas por ambiente. Se nao houver integracao, a API deve retornar `NOT_CONFIGURED` ou omitir a capacidade; nunca fabricar dados.
+
+## 2. Arquitetura recomendada
+
+```text
+via-fluvial-app
+  -> api-engenharia-operacoes
+       -> Actuator das 19 APIs
+       -> health pelo gateway (quando configurado)
+       -> health direto server-side (quando permitido)
+       -> PostgreSQL compartilhado para historico/configuracao
+       -> Gravitee Management API (adaptador opcional, futuro)
+       -> Keycloak Admin/health (adaptador opcional, futuro)
+       -> auditoria/notificacoes (adaptadores opcionais)
+```
+
+A API agregadora e a fonte confiavel para estado, latencia, historico e diagnostico. O navegador apenas:
+
+- consulta a API agregadora;
+- mostra o modo efetivo de transporte do proprio build/runtime;
+- envia, opcionalmente, um snapshot sanitizado desse modo;
+- nunca recebe credenciais tecnicas nem URLs internas irrestritas;
+- nunca executa fallback automatico para backend direto.
+
+## 3. Escopo funcional do MVP
+
+### Backend
+
+- scaffold completo do 20o microsservico;
+- registry server-side dos 19 servicos e ambientes LOCAL/DSV/HML/PRD;
+- health checks periodicos e manuais, com timeout, limite de concorrencia e isolamento de falhas;
+- checks por gateway e direto quando ambos estiverem configurados;
+- estados `UP`, `DEGRADED`, `DOWN`, `UNKNOWN`, `DISABLED`, `NOT_CONFIGURED`;
+- diagnosticos `HEALTHY`, `GATEWAY_FAILURE`, `BACKEND_FAILURE`, `BOTH_UNAVAILABLE`, `ROUTE_MISMATCH`;
+- overview, detalhes, historico e matriz de dependencias baseada em configuracao/evidencia;
+- recepcao de snapshot sanitizado da configuracao efetiva do frontend;
+- persistencia resumida e politica de retencao;
+- OpenAPI 3.1, seguranca, correlation ID, logs estruturados, Actuator e testes.
+
+### Frontend
+
+- nova view `engineering` dentro da administracao da plataforma;
+- acesso de leitura para `ADMINISTRADOR`, `AUDITOR` e `SUPORTE`, respeitando a matriz existente;
+- visao geral, lista/tabela de servicos, detalhes, rotas, dependencias, historico e configuracao do frontend;
+- filtros por ambiente, status, categoria e texto;
+- atualizacao manual e polling controlado;
+- indicacao clara de gateway, direto, divergencia e contingencia;
+- estados de loading, vazio, parcial, erro, dados antigos e sem configuracao;
+- remocao/extracao da logica duplicada de health de `App.tsx`;
+- testes Vitest/Testing Library e build.
+
+## 4. Fases posteriores, fora do MVP obrigatorio
+
+### Fase 2
+
+- incidentes;
+- manutencao planejada;
+- alertas com deduplicacao;
+- SLI simples e agregacoes de disponibilidade;
+- adaptador real para auditoria e notificacoes;
+- health funcional de jornadas somente leitura.
+
+### Fase 3
+
+- integracao autenticada com Gravitee Management API;
+- eventos de deploy assinados;
+- certificados e versoes implantadas;
+- adaptadores para Keycloak e infraestrutura;
+- proxy de contingencia ou segundo gateway, implementado fora do navegador.
+
+### Fase 4
+
+- Prometheus/Grafana/Loki/OpenTelemetry como fontes especializadas;
+- tracing distribuido;
+- SLOs e alertas avancados.
+
+## 5. Criterios globais de qualidade
+
+- nao alterar regras de negocio dos 19 microsservicos;
+- nao expor segredos;
+- nao considerar 401/403 como servico saudavel; classificar como `AUTH_REQUIRED` ou diagnostico equivalente;
+- nao considerar uma resposta HTTP qualquer como `UP`; interpretar o payload do Actuator quando presente;
+- nao aceitar URL arbitraria em endpoint publico, evitando SSRF;
+- nao consultar todos os servicos diretamente do browser em producao;
+- nao fazer fallback automatico no browser;
+- manter contratos API-first e tipos gerados quando esse for o padrao local;
+- preservar alteracoes preexistentes no worktree;
+- adicionar testes proporcionais ao risco;
+- executar validacoes focadas e informar resultados reais, sem afirmar sucesso sem evidencia.
+
+## 6. Ordem de execucao no Codex
+
+1. Abrir a raiz do workspace.
+2. Executar integralmente `prompt-backend.txt`.
+3. Revisar OpenAPI e executar testes/build do backend.
+4. Subir o backend e validar health e endpoints de overview.
+5. Executar integralmente `prompt-frontend.txt`.
+6. Executar `npm test`, `npm run build` e teste integrado com backend.
+7. Validar em desktop e mobile a area de Engenharia.
+
+## 7. Resultado esperado
+
+Ao final, a Plataforma VFA tera uma Central de Engenharia coerente com sua arquitetura real: agregacao server-side, frontend administrativo protegido, diagnostico gateway versus direto, inventario completo de 19 APIs, historico inicial e caminho claro de evolucao para observabilidade, sem introduzir um bypass inseguro do Gravitee.

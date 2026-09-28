@@ -1,0 +1,166 @@
+openapi: 3.1.0
+info:
+  title: api-engenharia-operacoes
+  version: 1.0.0
+  description: API responsavel por engenharia e operacoes, incluindo monitoramento operacional, rotinas tecnicas e suporte a operacao da frota.
+servers:
+  - url: /api/v1
+    description: Runtime de Desenvolvimento
+  - url: https://api-engenharia-operacoes.hml.viafluvial.com.br/api/v1
+    description: Runtime de Homologacao
+  - url: https://api-engenharia-operacoes.prd.viafluvial.com.br/api/v1
+    description: Runtime de Producao
+security:
+  - bearerAuth: []
+paths:
+  /engineering/overview:
+    get:
+      operationId: getEngineeringOverview
+      parameters:
+        - in: query
+          name: environment
+          schema:
+            type: string
+            enum: [LOCAL, DSV, HML, PRD]
+            default: DSV
+      responses:
+        '200':
+          description: OK
+  /engineering/services:
+    get:
+      operationId: listEngineeringServices
+      parameters:
+        - in: query
+          name: environment
+          schema:
+            type: string
+            enum: [LOCAL, DSV, HML, PRD]
+            default: DSV
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: category
+          schema:
+            type: string
+        - in: query
+          name: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /engineering/services/{serviceKey}:
+    get:
+      operationId: getEngineeringService
+      parameters:
+        - in: path
+          name: serviceKey
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: environment
+          schema:
+            type: string
+            enum: [LOCAL, DSV, HML, PRD]
+            default: DSV
+      responses:
+        '200':
+          description: OK
+  /engineering/services/{serviceKey}/history:
+    get:
+      operationId: getEngineeringServiceHistory
+      parameters:
+        - in: path
+          name: serviceKey
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: environment
+          schema:
+            type: string
+            enum: [LOCAL, DSV, HML, PRD]
+            default: DSV
+        - in: query
+          name: size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: OK
+  /engineering/dependencies:
+    get:
+      operationId: getEngineeringDependencies
+      parameters:
+        - in: query
+          name: environment
+          schema:
+            type: string
+            enum: [LOCAL, DSV, HML, PRD]
+            default: DSV
+      responses:
+        '200':
+          description: OK
+  /engineering/runs/{runId}:
+    get:
+      operationId: getEngineeringRun
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+  /engineering/checks/run:
+    post:
+      operationId: runEngineeringChecks
+      parameters:
+        - in: query
+          name: environment
+          schema:
+            type: string
+            enum: [LOCAL, DSV, HML, PRD]
+            default: DSV
+      responses:
+        '200':
+          description: OK
+  /engineering/frontend-runtime/latest:
+    get:
+      operationId: getLatestFrontendRuntime
+      parameters:
+        - in: query
+          name: environment
+          schema:
+            type: string
+            enum: [LOCAL, DSV, HML, PRD]
+            default: DSV
+      responses:
+        '200':
+          description: OK
+  /engineering/frontend-runtime:
+    post:
+      operationId: postFrontendRuntime
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

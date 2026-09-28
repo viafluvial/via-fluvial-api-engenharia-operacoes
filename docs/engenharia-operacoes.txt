@@ -1,0 +1,175 @@
+Engenharia de Operações
+
+1. Microsserviço
+
+Microsserviço:
+
+    Nome do domínio (Bounded Context):
+
+        engenharia-operacoes
+
+    Nome do microsserviço (repositório):
+
+        via-fluvial-api-engenharia-operacoes
+
+    Service Slug:
+
+        engenharia-operacoes
+
+Configuração de Build (pom.xml):
+
+    groupId:
+
+        br.com.viafluvial
+
+    artifactId:
+
+        api-engenharia-operacoes
+
+    name:
+
+        api-engenharia-operacoes
+
+    description:
+
+        Microsserviço responsável pelo domínio de engenharia e operações, incluindo monitoramento da saúde dos serviços, gestão de incidentes, observabilidade, análise de disponibilidade e acompanhamento operacional da plataforma, implementado com Java 21 e Spring Boot, seguindo DDD, Clean Architecture e API-First (OpenAPI 3.1). Integra-se explicitamente com os demais microsserviços por meio de contratos bem definidos, fornecendo visibilidade operacional, diagnóstico confiável e suporte à evolução segura da plataforma.
+
+Estrutura da Aplicação:
+
+    Pacote base Java:
+
+        br.com.viafluvial.engenharia-operacoes
+
+API:
+
+    Versão da API:
+
+        v1
+
+    Base path:
+
+        /api/v1
+
+    Context path da aplicação:
+
+        /
+
+Execução da Aplicação em Container:
+
+    Porta interna do container (Spring Boot):
+
+        8080
+
+    Porta exposta no host (cluster):
+
+        <PORT> (bloco reservado 18001 – 18xx)
+
+    Modo de publicação da porta (Docker Swarm):
+
+        host
+
+Ambiente de Execução:
+
+    Ambientes suportados:
+
+        dsv
+
+        hml
+
+        prd
+
+Conectividade da Aplicação:
+
+    Host interno (dentro do cluster Swarm):
+
+        api-engenharia-operacoes
+
+    Porta interna:
+
+        8080
+
+    Host externo (acesso via API Gateway):
+
+        api-gateway.prd.viafluvial.com.br
+
+    Endpoint externo (Gateway – público):
+
+        https://api-gateway.prd.viafluvial.com.br/api/v1/engenharia-operacoes/{id}
+
+    Endpoint interno (Backend – rede interna):
+
+        https://api-engenharia-operacoes.prd.viafluvial.com.br/api/v1/engenharia-operacoes/{id}
+
+Identidade do Serviço:
+
+    Nome lógico do serviço (service.name):
+
+        api-engenharia-operacoes
+
+    Namespace / Domínio organizacional:
+
+        viafluvial
+
+2. Banco de Dados
+
+Microsserviço:
+
+    Engine:
+
+        PostgreSQL
+
+    Modelo de Persistência:
+
+        Banco de dados dedicado por microsserviço (1:1)
+
+    Nome do banco de dados:
+
+        db-engenharia-operacoes
+
+    Usuário do banco:
+
+        engenharia-operacoes_app
+
+    Schema:
+
+        sc-engenharia-operacoes 
+
+Execução em Container:
+
+    Nome do container do banco:
+
+        postgres-engenharia-operacoes
+
+    Porta interna do container (PostgreSQL):
+
+        5432
+
+    Porta exposta no host (cluster):
+
+        <DB_PORT> (bloco reservado 15432 – 154xx)
+
+    Modo de publicação da porta (Docker Swarm):
+
+        host
+
+Conectividade:
+
+    Host interno (dentro do cluster Swarm):
+
+        postgres-engenharia-operacoes
+
+    Porta interna:
+
+        5432
+
+    Host externo (acesso inter-cluster, quando aplicável):
+
+        <NODE_IP | LB_DNS>
+
+    Porta externa:
+
+        <DB_PORT>
+
+    URL JDBC (resolvida por variáveis de ambiente):
+
+        jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}

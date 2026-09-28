@@ -1,0 +1,36 @@
+services:
+  postgres-engenharia-operacoes:
+    image: postgres:16-alpine
+    container_name: postgres-engenharia-operacoes
+    environment:
+      POSTGRES_DB: ${DB_NAME:-db-engenharia-operacoes}
+      POSTGRES_USER: ${DB_USERNAME:-engenharia-operacoes_app}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-engenharia-operacoes_app}
+    ports:
+      - "15440:5432"
+    volumes:
+      - postgres_engenharia_operacoes_data:/var/lib/postgresql/data
+
+  api-engenharia-operacoes:
+    build:
+      context: .
+    container_name: api-engenharia-operacoes
+    depends_on:
+      - postgres-engenharia-operacoes
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dsv}
+      DB_HOST: ${DB_HOST:-172.17.0.1}
+      DB_PORT: ${DB_PORT:-15432}
+      DB_NAME: ${DB_NAME:-db-engenharia-operacoes}
+      DB_USERNAME: ${DB_USERNAME:-vfa_app}
+      DB_PASSWORD: ${DB_PASSWORD:-vfa_app}
+      DB_SCHEMA: ${DB_SCHEMA:-sc-engenharia-operacoes}
+      SECURITY_MODE: ${SECURITY_MODE:-dev}
+      ENGINEERING_DSV_HOST: ${ENGINEERING_DSV_HOST:-172.17.0.1}
+      ENGINEERING_LOCAL_HOST: ${ENGINEERING_LOCAL_HOST:-172.17.0.1}
+      ENGINEERING_SELF_BASE_URL: ${ENGINEERING_SELF_BASE_URL:-http://localhost:8080/api/v1}
+    ports:
+      - "${API_PORT_EXTERNAL:-18020}:8080"
+
+volumes:
+  postgres_engenharia_operacoes_data:

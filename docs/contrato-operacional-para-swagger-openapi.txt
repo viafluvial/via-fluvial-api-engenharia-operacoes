@@ -1,0 +1,250 @@
+Você é um Arquiteto/Engenheiro de Software Sênior e deve implementar o padrão de documentação e exposição de APIs para um microsserviço Java 21 + Spring Boot 3.x, com Springdoc OpenAPI, seguindo contrato operacional rígido e validável.
+1. POLÍTICA ÚNICA DE BASE PATH (OBRIGATÓRIA)
+
+    Adotar exclusivamente:
+        server.servlet.context-path=/api/v1
+    Regras obrigatórias:
+        OpenAPI paths 
+        Controllers NÃO devem repetir /api/v1 em @RequestMapping
+        É proibido adicionar prefixo via gateway local
+        É proibido usar múltiplas estratégias de prefixo
+        É proibido duplicar prefixo em qualquer camada
+    O runtime final deve expor endpoints em:
+        http://localhost:8080/api/v1/{pathOpenApi}
+    Qualquer 404 por conflito de prefixo deve ser corrigido antes da entrega.
+
+2. POLÍTICA DE OPENAPI + SWAGGER (DUAS FONTES CONTROLADAS)
+
+2.1. Swagger UI com Duas Fontes no Mesmo Portal (OBRIGATÓRIO)
+
+    A Swagger UI deve permitir alternância entre:
+        OpenAPI Runtime (gerado pelo Springdoc)
+        OpenAPI Estático versionado
+    Ambos devem estar acessíveis no mesmo portal Swagger, com seletor de fonte ativo
+    Fonte 1 - Runtime (principal):
+        /api/v1/v3/api-docs
+        Gerado dinamicamente pelo Springdoc
+        Deve exibir botão Authorize
+        Deve possuir definição explícita de segurança Bearer JWT
+    Fonte 2 – YAML Estático (versionado)
+        Arquivo obrigatório: src/main/resources/static/openapi/openapi.yaml
+        Disponibilização obrigatória: /api/v1/openapi/openapi.yaml
+        O YAML deve:
+            Ser validado contra o runtime
+            Ser coerente com os endpoints implementados
+            Não conter inconsistências estruturais
+            Não conter definições contraditórias de segurança
+
+3. CONFIGURAÇÃO DE SERVERS NO OPENAPI
+
+    servers:
+    - url: "/api/v1"
+    description: "Runtime de Desenvolvimento"
+
+    - url: "https://api-<dominio>.hml.viafluvial.com.br/api/v1"
+    description: "Runtime de Homologação"
+
+    - url: "https://api-<dominio>.prd.viafluvial.com.br/api/v1"
+    description: "Runtime de Produção"
+
+    Regras obrigatórias:
+
+        Ambiente de desenvolvimento pode usar URL relativa.
+
+        Homologação e Produção devem usar URL absoluta.
+
+        Todas devem terminar com /api/v1.
+
+        É proibido duplicar /api/v1 nos paths.
+
+        É proibido adicionar servidores adicionais fora desses três.
+
+        As descrições devem refletir claramente o contexto operacional.
+
+4. SEGURANÇA OPENAPI (BOTÃO AUTHORIZE OBRIGATÓRIO)
+
+    O OpenAPI Runtime deve conter explicitamente:
+    4.1. Security Scheme:
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+    4.2. Security Requirement Global:
+
+security:
+  - bearerAuth: []
+
+    Regras:
+
+        O botão Authorize deve aparecer na Swagger UI
+
+        A segurança deve funcionar tanto no runtime quanto no YAML estático
+
+        É proibido depender apenas da configuração do Spring Security sem refletir no OpenAPI
+
+5. MATRIZ DE SEGURANÇA POR PROFILE
+
+    dsv
+        Pode permitir requisição anônima OU
+
+        Pode injetar principal mock configurável
+
+        Endpoint /me deve funcionar sem JWT real
+
+        Não pode retornar 404 por erro de segurança
+
+    hml / prd
+
+        JWT válido obrigatório
+
+        401 → token ausente
+
+        403 → role insuficiente
+
+        Nunca retornar 404 por falha de autenticação
+
+6. CRITÉRIOS OBJETIVOS DE ACEITE (OBRIGATÓRIO VALIDAR)
+
+    Após subir aplicação (docker compose up), validar:
+        1) GET /api/v1/actuator/health → 200
+        2) GET /api/v1/swagger-ui/index.html → 200
+        3) GET /api/v1/v3/api-docs → 200
+        4) GET /api/v1/openapi/openapi.yaml → 200
+        5) Pelo menos um endpoint crítico do domínio responde != 404
+    Se qualquer item falhar:
+        Corrigir base path
+        Corrigir springdoc
+        Corrigir mapeamento controller
+        Corrigir static resources
+        Revalidar até 100% verde
+    Entrega final deve informar:
+        URLs finais
+        Política aplicada
+        Status HTTP validado
+
+7. POLÍTICA DE COMPLETUDE DOCUMENTAL (OBRIGATÓRIA)
+
+A documentação deve estar completa em dois níveis:
+
+A) Dentro do OpenAPI
+B) Fora do OpenAPI (README/guia operacional)
+
+7.1. Obrigatório por Endpoint:
+
+    Cada operação deve conter:
+
+        Tag
+
+        operationId
+
+        summary
+
+        description clara (objetivo + regra de negócio)
+
+        Parâmetros descritos (tipo, formato, exemplo)
+
+        RequestBody com schema e examples
+
+        Responses com description textual clara
+
+        Exemplos de erro (Problem Details quando aplicável)
+
+        Security explícito por operação
+
+        Regras de negócio e efeitos colaterais
+
+7.2.  Obrigatório por Schema:
+
+    Todo campo deve possuir:
+
+        Description funcional
+
+        Tipo/format correto
+
+        Exemplo realista
+
+        required corretamente definido
+
+        Constraints (enum, pattern, minLength, etc.)
+
+        Coerência com validações do runtime
+
+7.3. Documentação Externa Complementar
+
+    Quando necessário, documentar também:
+
+        Fluxo de autenticação por profile
+
+        Códigos de erro e cenários comuns
+
+        Paginação/filtros/ordenação
+
+        Uso de X-Correlation-Id
+
+        Exemplos ponta a ponta
+
+8. REGRA DE BLOQUEIO DE ENTREGA
+
+É proibido entregar:
+
+    Endpoint com summary vazio
+
+    Response sem description
+
+    Schema sem descrição de campos
+
+    Inconsistência entre runtime e YAML
+
+A entrega só é válida com:
+
+    Swagger funcional
+
+    Alternância entre Runtime e YAML
+
+    Botão Authorize visível
+
+    Servers corretos por ambiente
+
+    Base path sem conflito
+
+    Checklist de completude documental
+
+9. REGRA DE NORMALIZAÇÃO DE PATH (ANTI-DUPLICAÇÃO) — OBRIGATÓRIA
+
+Objetivo:
+
+    Impedir qualquer composição que resulte em prefixo duplicado, como: /api/v1/api/v1/*
+
+Regra única de prefixo:
+
+    O prefixo /api/v1 deve existir em apenas UM ponto de configuração efetiva
+    É proibido repetir /api/v1 em múltiplas camadas para a mesma rota final
+
+Aplicação obrigatória:
+
+    Se server.servlet.context-path=/api/v1 estiver ativo:
+        springdoc.api-docs.path deve ser relativo (ex.: /v3/api-docs)
+        springdoc.swagger-ui.path deve ser relativo (ex.: /swagger-ui/index.html)
+        URLs internas de springdoc (swagger-ui.urls/url) devem ser relativas ao context-path e NÃO podem repetir /api/v1
+    É proibido configurar simultaneamente:
+        context-path com /api/v1 + url/path absoluto já contendo /api/v1
+        quando isso gerar rota final duplicada
+
+Exemplos proibidos:
+
+    /api/v1/api/v1/v3/api-docs
+    /api/v1/api/v1/openapi/openapi.yaml
+
+Exemplos válidos:
+
+    /api/v1/v3/api-docs
+    /api/v1/openapi/openapi.yaml
+    /api/v1/swagger-ui/index.html
+
+Critério de bloqueio:
+
+     Se qualquer endpoint exposto contiver /api/v1/api/v1, a entrega deve ser recusada

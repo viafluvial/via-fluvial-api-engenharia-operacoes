@@ -1,0 +1,156 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: api-engenharia-operacoes
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:db-engenharia-operacoes}
+    username: ${DB_USERNAME:engenharia-operacoes_app}
+    password: ${DB_PASSWORD:engenharia-operacoes_app}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: ${DB_SCHEMA:sc-engenharia-operacoes}
+        format_sql: false
+  flyway:
+    enabled: true
+    default-schema: ${DB_SCHEMA:sc-engenharia-operacoes}
+    schemas: ${DB_SCHEMA:sc-engenharia-operacoes}
+    locations: classpath:db/migration
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui/index.html
+    urls:
+      - name: OpenAPI Runtime
+        url: /v3/api-docs
+      - name: OpenAPI Estatico
+        url: /openapi/openapi.yaml
+
+security:
+  mode: ${SECURITY_MODE:oauth2}
+  dev:
+    roles: ${SECURITY_DEV_ROLES:ADMINISTRADOR,SUPORTE,AUDITOR}
+
+app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173}
+    allowed-methods: ${APP_CORS_ALLOWED_METHODS:GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD}
+    allowed-headers: ${APP_CORS_ALLOWED_HEADERS:*}
+
+management:
+  endpoints:
+    access:
+      default: unrestricted
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+engineering:
+  checks:
+    enabled: ${ENGINEERING_CHECK_SCHEDULER_ENABLED:true}
+    interval-seconds: ${ENGINEERING_CHECK_INTERVAL_SECONDS:30}
+    timeout-millis: ${ENGINEERING_CHECK_TIMEOUT_MILLIS:4000}
+    history-retention-days: ${ENGINEERING_HISTORY_RETENTION_DAYS:15}
+    max-concurrency: ${ENGINEERING_CHECK_MAX_CONCURRENCY:8}
+  registry:
+    services:
+      - key: identidade-autenticacao
+        name: api-identidade-autenticacao
+        category: Identidade e Acesso
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18001/api/v1
+        local-gateway-base-url:
+      - key: perfis-usuarios
+        name: api-perfis-usuarios
+        category: Identidade e Acesso
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18002/api/v1
+      - key: compliance
+        name: api-compliance
+        category: Administracao da Plataforma
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18003/api/v1
+      - key: administracao
+        name: api-administracao
+        category: Administracao da Plataforma
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18004/api/v1
+      - key: auditoria
+        name: api-auditoria
+        category: Auditoria e Conformidade
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18005/api/v1
+      - key: embarcacoes
+        name: api-embarcacoes
+        category: Cadastros Operacionais
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18006/api/v1
+      - key: tripulacao
+        name: api-tripulacao
+        category: Cadastros Operacionais
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18007/api/v1
+      - key: viagens
+        name: api-viagens
+        category: Viagens e Operacao Fluvial
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18008/api/v1
+      - key: reservas
+        name: api-reservas
+        category: Reservas, Vendas e Bilhetes
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18009/api/v1
+      - key: venda-ingressos
+        name: api-venda-ingressos
+        category: Reservas, Vendas e Bilhetes
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18010/api/v1
+      - key: ticket-suporte
+        name: api-ticket-suporte
+        category: Reservas, Vendas e Bilhetes
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18011/api/v1
+      - key: financeiro
+        name: api-financeiro
+        category: Pagamentos e Financeiro
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18012/api/v1
+      - key: operacoes-agencia
+        name: api-operacoes-agencia
+        category: Agencias e Vendedores
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18013/api/v1
+      - key: relatorios
+        name: api-relatorios
+        category: Relatorios e Analytics
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18014/api/v1
+      - key: notificacoes
+        name: api-notificacoes
+        category: Suporte e Atendimento
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18015/api/v1
+      - key: suporte
+        name: api-suporte
+        category: Suporte e Atendimento
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18016/api/v1
+      - key: rotas-portos
+        name: api-rotas-portos
+        category: Cadastros Operacionais
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18017/api/v1
+      - key: pagamentos
+        name: api-pagamentos
+        category: Pagamentos e Financeiro
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18018/api/v1
+      - key: acervo-digital
+        name: api-acervo-digital
+        category: Documentos e Acervo Digital
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18019/api/v1
+      - key: engenharia-operacoes
+        name: api-engenharia-operacoes
+        category: Administracao da Plataforma
+        local-direct-base-url: ${ENGINEERING_SELF_BASE_URL:http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18020/api/v1}
+      - key: avaliacoes-experiencia
+        name: api-avaliacoes-experiencia
+        category: Relatorios e Analytics
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18021/api/v1

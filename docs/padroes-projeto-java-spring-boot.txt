@@ -1,0 +1,812 @@
+Contexto do Projeto
+
+Você é um arquiteto/engenheiro sênior Java. Gere um microsserviço em Spring Boot 3.x, utilizando Java 21, seguindo API-First com OpenAPI 3.1 como fonte única da verdade, e implementando Domain-Driven Design (DDD) com Clean Architecture + Ports and Adapters (Hexagonal), respeitando SOLID e desenvolvimento orientado a testes (TDD).
+
+Este padrão deve ser compatível com:
+
+    Arquitetura orientada a domínios (conforme documentação DDD existente)
+
+    Estratégia API-First (conforme documentação existente)
+
+    Integrações explícitas entre microsserviços (conforme documentação existente)
+
+    Evolução segura e incremental da plataforma
+
+1. Stack e Dependências
+
+    Java 21
+
+    Spring Boot 3.x (preferir a versão estável mais recente compatível com Java 21
+
+        Maven + Maven Wrapper (./mvnw)
+
+        Dependências principais (obrigatórias):
+
+            Runtime (produção):
+
+                spring-boot-starter-web (REST Controllers / JSON)
+
+                spring-boot-starter-validation (Bean Validation na borda)
+
+                spring-boot-starter-security (segurança habilitada em todos)
+
+                spring-boot-starter-oauth2-resource-server (modo security.mode=oauth2 com JWT)
+
+                spring-boot-starter-data-jpa (adapter de persistência JPA)
+
+                postgresql (driver)
+
+                flyway-core (migrations)
+
+                spring-boot-starter-actuator (health/info/metrics)
+
+                micrometer-registry-prometheus (se você quer metrics scrape por Prometheus; se não, pode ser secundária)
+
+            Mapeamento (para Domain ↔ DTO/JPA):
+
+                mapstruct (mappers)
+
+                mapstruct-processor (como annotationProcessor no Maven)
+
+            API-First (geração a partir do OpenAPI 3.1):
+
+                openapi-generator-maven-plugin (plugin de build, não “dependency runtime”, gera interfaces/stubs e DTOs em pasta target/generated-sources)
+
+            Logs estruturados + Correlation ID:
+
+                logstash-logback-encoder (JSON logs com Logback)
+
+            Testes (obrigatórios):
+
+                spring-boot-starter-test (JUnit 5 + Spring Test)
+
+                mockito-core (ou já via starter-test)
+
+                assertj-core (ou já via starter-test)
+
+                testcontainers (core)
+
+                testcontainers-junit-jupiter
+
+                testcontainers-postgresql
+
+                spring-security-test (testar @PreAuthorize / security)
+
+                rest-assured (se você realmente vai fazer testes de contrato/integração HTTP; senão pode virar secundária)
+
+            Cobertura (obrigatório):
+
+                jacoco-maven-plugin (plugin Maven; regra de 80% em domain/ e application/)
+
+        Dependências secundárias (recomendadas / opcionais):
+
+            Observabilidade / OpenTelemetry:
+
+                Micrometer Tracing + Bridge OTel (recomendado com Spring Boot 3)
+
+                    micrometer-tracing-bridge-otel
+
+                    opentelemetry-exporter-otlp (para OTLP http/grpc quando habilitar)
+
+                    opentelemetry-sdk (às vezes vem transitivo, mas pode explicitar)
+
+            Resiliência (para “timeout/retry/fallback” por integração):
+
+                resilience4j-spring-boot3 (retry/circuit breaker/bulkhead/time limiter)
+
+            RFC 7807 (Problem Details)
+
+                Usar ProblemDetail nativo do Spring 6 (via @ControllerAdvice)
+
+            HTTP Client para ports out:
+
+                Usar RestClient do Spring (sem depender extra)
+
+            Qualidade/Padronização de build:
+
+                spring-boot-configuration-processor (metadados de config)
+
+                spotless-maven-plugin ou checkstyle (governança de estilo)
+
+        Tooling & Runtime
+
+            Dockerfile
+
+            Docker Compose
+
+            Makefile
+
+            CI/CD pipeline
+
+2. Restrições e objetivos obrigatórios
+
+2.1. Escopo do Microsserviço (Bounded Context)
+
+    Este repositório implementa exatamente UM único domínio (Bounded Context), conforme a modelagem DDD oficial da plataforma
+    Regras obrigatórias:
+        É proibido implementar entidades, value objects, use cases ou regras de negócio de outros domínios neste microsserviço
+        Integrações com outros domínios devem ocorrer exclusivamente via Ports Out (clients HTTP, mensageria, etc)
+        Nenhuma classe de outro domínio pode existir neste código-base, exceto:
+            DTOs de integração
+            Clients/adapters externos
+
+2.2. API-First (OpenAPI como fonte da verdade)
+
+    Toda API deve ser derivada exclusivamente do arquivo OpenAPI 3.1 (openapi.yaml)
+
+    O OpenAPI é o contrato oficial entre serviços
+
+    Utilize openapi-generator para gerar:
+
+        Interfaces de controllers
+
+        DTOs de API
+
+    Arquivos gerados não devem ser editados manualmente
+
+    Controllers devem atuar como adapters, delegando a execução para use cases (ports in)
+
+    Regra fundamental: DTOs expostos pela API não podem vazar para o domínio
+
+2.3. Arquitetura Hexagonal / Clean Architecture
+
+    Domínio no centro, totalmente independente de frameworks
+
+    Domain:
+
+        Entidades
+
+        Value Objects
+
+        Regras de negócio
+
+        Invariantes
+
+        Domain Services
+
+        Domain Events
+
+        Exceções de domínio
+
+        Nenhuma dependência de Spring ou bibliotecas técnicas
+
+    Application
+        Orquestra fluxos de negócio
+        Implementa use cases
+        Controla transações
+        Depende apenas de ports
+    Ports
+        Ports In: use cases
+        Ports Out: persistência, gateways externos, mensageria, publishers
+    Adapters
+        Entrada: REST (controllers)
+        Saída: JPA, clients HTTP, mensageria, etc.
+
+2.4. Princípios SOLID
+
+    Aplicação obrigatória dos princípios SOLID no contexto de DDD, Clean Architecture e Ports and Adapters.
+    Princípios Arquiteturais: 
+
+        Responsabilidade Única (SRP):
+
+            Cada classe deve possuir uma única responsabilidade bem definida
+
+            Controllers não devem conter lógica de negócio
+
+            Use cases devem representar uma única ação de negócio
+
+            Entidades e Value Objects não devem conter responsabilidades técnicas
+
+        Aberto/Fechado (OCP):
+
+            O domínio e os use cases devem estar abertos para extensão e fechados para modificação
+
+            Novas funcionalidades devem ser implementadas por:
+
+                novos use cases
+
+                novos adapters
+
+                novas implementações de ports
+
+            É proibido alterar regras de domínio para acomodar detalhes técnicos
+
+        Substituição de Liskov (LSP):
+
+            Implementações de ports devem respeitar integralmente os contratos definidos pelas interfaces
+
+            Adapters substituíveis não podem alterar o comportamento esperado pelos use cases
+
+            Implementações não devem violar invariantes do domínio
+
+        Segregação de Interfaces (ISP):
+
+            Ports devem ser pequenos, específicos e orientados a um único caso de uso
+
+            É proibido criar interfaces genéricas ou multifuncionais (ex.: GenericRepository)
+
+            Cada integração externa deve possuir seu próprio port
+
+        Inversão de Dependência (DIP):
+
+            O domínio e a aplicação dependem exclusivamente de abstrações (ports)
+
+            A aplicação não pode depender de implementações técnicas
+
+            Adapters dependem do domínio e da aplicação, nunca o contrário
+
+            É proibido o domínio depender de:
+
+                Spring Framework
+
+                JPA
+
+                bibliotecas técnicas
+
+                frameworks de mensageria ou HTTP
+
+    Regras Obrigatórias (Derivadas de SOLID)
+
+        É proibido criar classes utilitárias genéricas (Utils, Helper, CommonService)
+
+        É proibido injetar adapters diretamente em controllers
+
+        É proibido que adapters chamem outros adapters diretamente
+
+        Toda dependência técnica deve ser encapsulada em um adapter
+
+        Classes inchadas (“god classes”) não são permitidas
+
+2.5. Perfis de Ambiente
+
+    Perfis oficiais do serviço:
+        dsv (desenvolvimento)
+        hml (homologação)
+        prd (produção)
+    Configuração:
+        application.yml (configuração base)
+        application-dsv.yml
+        application-hml.yml
+        application-prd.yml
+    Informações sensíveis devem ser fornecidas exclusivamente via variáveis de ambiente
+    Ativação de perfil:
+        Via Maven:
+            ./mvnw -P dsv spring-boot:run
+            ./mvnw -P hml spring-boot:run
+            ./mvnw -P prd spring-boot:run
+    Via propriedade:
+        -Dspring.profiles.active=dsv|hml|prd
+    Regras:
+        Maven profiles devem apenas definir propriedades (ex.: spring.profiles.active)
+        É proibido condicionar lógica de negócio por profile
+        Perfis podem alterar apenas configuração técnica (URLs, credenciais, flags)
+
+2.6. Testes (TDD obrigatório)
+
+    Objetivo: garantir evolução segura e qualidade do domínio.
+    Tipos de testes exigidos:
+        Domínio (Unitários):
+            Entidades, Value Objects, invariantes e regras
+            Sem Spring (JUnit puro)
+        Application / Use Cases (Unitários):
+            Casos de uso com mocks dos ports out
+            Verificação de orquestração e transações
+        REST Adapters (Web Slice):
+            @WebMvcTest
+            Validação de mapping request/response
+            Bean Validation e códigos HTTP
+        Persistência (Integração):
+            Testcontainers + PostgreSQL
+            Testar adapters de persistência e mapeamentos
+        Contrato OpenAPI:
+            Testes que garantam aderência ao openapi.yaml (OAS 3.1)
+            Build deve falhar se houver divergência
+    Cobertura de Testes (obrigatório):
+        Ferramenta:
+            JaCoCo obrigatório, integrado ao Maven
+        Meta mínima:
+            80% de cobertura no código de:
+                domain/
+                application/
+    Regras:
+        Código gerado (OpenAPI), configuração e DTOs simples podem ser excluídos da métrica de cobertura, com justificativa
+        O build deve falhar se a meta mínima não for atingida
+        Relatório de cobertura deve ser gerado automaticamente no build
+
+2.7. Mensagens
+
+ 2.7.1. Tratamento de Erros
+
+    Padrão RFC 7807 – application/problem+json
+
+    @ControllerAdvice centralizado
+
+    Mapeamento:
+
+        Exceções de domínio → 400, 404, 409, 422
+
+        Exceções técnicas → 500
+
+    Códigos de erro consistentes e documentados
+    Mensagem claras e objetivas
+
+2.7.2. Respostas de Sucesso (API Guidelines)
+
+    Não existe uma RFC específica para “mensagem de sucesso” equivalente ao RFC 7807
+    O padrão oficial é a semântica HTTP.
+    Regras obrigatórias:
+        Preferir respostas REST padrão sem envelope global (evitar {success,message,data})
+        GET: 200 com representação conforme OpenAPI
+        POST: 201 com corpo do recurso criado e header Location quando aplicável
+        PUT/PATCH: 200 com representação OU 204 sem corpo (documentar no OpenAPI)
+        DELETE: 204 sem corpo.
+    Mensagens de sucesso só devem existir para operações do tipo command (aprovar, cancelar, confirmar, reprocessar) onde não há “recurso” claro a retornar
+    Para esses casos, padronizar um SuccessResponse:
+        code (string, machine-friendly)
+        message (string, opcional e curta)
+        correlationId (string)
+        timestamp (date-time)
+        resourceId (string, opcional)
+    A forma final (schemas) deve estar documentada no openapi.yaml
+
+2.8. Logs 
+
+2.8.1. Logs de Negócio (Business Audit Logging)
+
+    Objetivo: registrar eventos relevantes do domínio para auditoria, rastreabilidade e análise, sem substituir logs técnicos.
+    Regras obrigatórias:
+        Emitir logs estruturados (JSON) para eventos de negócio relevantes.
+        Não logar dados sensíveis (LGPD): evitar PII completa; usar IDs e campos mínimos.
+        Todo log de negócio deve conter no mínimo:
+            eventType (ex.: BOOKING_CREATED, PAYMENT_AUTHORIZED)
+            entityType e entityId
+            actorType (USER/SERVICE) e actorId (sub/clientId)
+            result (SUCCESS/FAIL)
+            correlationId
+            timestamp
+            metadata (chave-valor, opcional)
+        Implementação:
+            Preferir disparo a partir do Application/Use Case (ou via Domain Events), mantendo o domínio limpo e independente.
+            Logs de negócio não devem ser usados como resposta de API.
+
+2.8.2. Logs Técnicos (Technical Logging)
+
+    Objetivo: diagnóstico técnico e operação do serviço (infra, erros, integrações, performance e ciclo de request).
+    Regras obrigatórias:
+        Logs técnicos devem ser estruturados (JSON) e conter no mínimo:
+            serviceName
+            environment
+            correlationId
+            timestamp
+            logLevel
+        Implementar logging de request/response via filtro/interceptor (não no controller):
+            method, path, status, durationMs, correlationId
+        Exceções técnicas devem registrar stacktrace completo apenas em ERROR.
+        WARN para falhas recuperáveis (retry, fallback, timeout isolado).
+        DEBUG apenas para investigação; em produção deve ser desabilitado por padrão.
+        Nunca logar segredos (tokens completos, senhas, chaves), nem payloads sensíveis. Se necessário, sanitizar e restringir a DEBUG.
+    Integrações externas:
+        Ao chamar outros serviços, logar target/operation, status, timeout, retry/fallback, sempre com correlationId.
+
+2.8.3. Log de Acesso (Access Logging – responsabilidade do Gateway)
+
+    Objetivo: registrar tráfego HTTP (quem chamou, quando, qual endpoint, status e latência)
+    Regras:
+        O log de acesso deve ser gerado no API Gateway / API Management (camada de borda),  e não nos microsserviços.
+        O microsserviço não deve duplicar log de acesso; ele deve focar em logs técnicos, logs de negócio e logs de segurança.
+        O Gateway deve registrar nomínimo:
+            clientId / apiKey (ou identificador equivalente)
+            ip de origem
+            method
+            path
+            status
+            durationMs
+            bytes in/out (se disponível)
+            correlationId (propagado para os microsserviços)
+    O correlationId deve ser gerado/propagado pelo gateway e repassado para os serviços.
+
+2.8.4. Auditoria (Audit Trail – persistência futura)
+
+    Objetivo: manter trilha imutável de ações críticas (prova/compliance), separada de logs técnicos e logs de negócio.
+    Regras:
+        Auditoria NÃO deve depender apenas de arquivos de log.
+        Eventos críticos devem ser elegíveis para auditoria persistente (tabela dedicada ou stream de eventos), mesmo que inicialmente sejam registrados apenas como logs de negócio estruturados.
+    Ações típicas auditáveis:
+        operações financeiras (autorização, captura, estorno)
+        alterações de status irreversíveis (confirmar/cancelar/emitir)
+        alterações administrativas (permissões, roles, configurações críticas)
+        ações relacionadas a dados sensíveis quando aplicável (LGPD)
+    Campos mínimos para eventos auditáveis:
+        auditEventType
+        entityType e entityId
+        actorType (USER/SERVICE) e actorId (sub/clientId)
+        timestamp
+        correlationId
+        result (SUCCESS/FAIL)metadata mínima (sem dados sensíveis)
+    Implementação:
+        Preferir emissão via Domain Events ou no Application/Use Case.
+        Criar estrutura para fácil evolução: hoje log estruturado; amanhã persistência.
+
+2.8.5. Logs de Segurança (Security Logging)
+
+    Objetivo: registrar eventos de autenticação/autorização e violações de segurança, sem expor dados sensíveis.
+    Regras obrigatórias:
+        Emitir logs estruturados (JSON) para eventos de segurança.
+    Logar:
+        token ausente/inválido/expirado
+        assinatura inválida / issuer incorreto
+        acesso negado por role/escopo (Access Denied)
+        chamadas service-to-service sem autorização válida
+    Nunca logar tokens completos, credenciais, segredos ou PII.
+    Todo log de segurança deve conter:
+        eventType (ex.: INVALID_TOKEN, SECURITY_ACCESS_DENIED)
+        reason
+        actorType (USER/SERVICE)
+        actorId (sub ou clientId)
+        endpoint e method
+        correlationId
+        timestamp
+    Níveis recomendados:
+        INFO: falhas esperadas (role insuficiente).
+        WARN: padrão suspeito ou repetido.
+        ERROR: falha de configuração (ex.: jwks indisponível).
+    Logs de segurança não substituem logs de auditoria nem logs de acesso.
+
+2.9. Padrões de Projeto
+
+    Separação Command / Query quando fizer sentido
+
+    Mappers isolados
+
+    Validações:
+
+        Bean Validation apenas na borda (API)
+
+        Invariantes no domínio
+
+    Sem lógica de negócio em controllers
+
+2.10. Banco de Dados, Migrations e Seeds
+
+    Engine:
+
+        PostgreSQL
+
+    Modelo de persistência:
+
+        Banco de dados dedicado por microsserviço (1:1)
+
+    Versionamento de schema:
+
+        Flyway (obrigatório)
+
+    Provisionamento do Banco:
+
+        A criação do banco de dados físico (database) é responsabilidade do provisionamento de infraestrutura (container, automação ou CI/CD).
+
+        O Flyway atua após o banco existir, versionando exclusivamente objetos internos (schema, tabelas, índices, constraints).
+
+    Migrations
+
+        Deve existir uma migration específica para:
+
+            criação do schema do microsserviço.
+
+        Deve existir uma migration por tabela, obrigatoriamente em arquivos separados.
+
+        É proibido criar múltiplas tabelas no mesmo arquivo de migration.
+
+        Alterações estruturais posteriores (índices, constraints, colunas) devem ser versionadas em novas migrations.
+
+        Todas as migrations devem ser:
+
+            versionadas
+
+            imutáveis
+
+            idempotentes
+
+    Seeds
+
+        Seeds são permitidos exclusivamente no ambiente de desenvolvimento (dsv).
+
+        Deve existir um arquivo de seed por tabela, separado das migrations.
+
+        Seeds de desenvolvimento devem conter grande volume e diversidade de dados, permitindo:
+
+            simulações funcionais
+
+            testes de regras de negócio
+
+            validação de integrações e fluxos completos
+
+        Seeds não devem ser executados automaticamente nos ambientes de homologação e produção.
+
+    Comportamento por Ambiente
+
+        dsv (desenvolvimento):
+
+            Executa migrations
+
+            Executa seeds
+
+        hml (homologação):
+
+            Executa somente migrations
+
+        prd (produção):
+
+            Executa somente migrations
+
+    Boas Práticas
+
+        Dados sensíveis nunca devem constar em seeds.
+
+        Seeds devem representar cenários realistas de negócio, respeitando invariantes do domínio.
+
+        A ausência de seeds fora do ambiente dsv é obrigatória para evitar risco operacional.
+
+2.11. Observabilidade mínima obrigatória
+
+    Logs estruturados
+
+    Correlation ID (X-Correlation-Id)
+
+        Gerado ou propagado via filtro HTTP
+
+        Injetado no MDC
+
+        Retornado na resposta
+
+    Spring Boot Actuator
+
+        health
+
+        info
+
+        metrics
+    Habilitar Micrometer Tracing (quando aplicável) e propagar correlation id em chamadas HTTP out (ports out)
+    Propagar X-Correlation-Id também em chamadas de saída (clients HTTP / mensageria)
+    Preparar suporte a tracing (Micrometer Tracing quando aplicável), sem exigir backend de tracing agora
+
+    OpenTelemetry (OTel):
+
+        Objetivo: preparar instrumentação padrão (traces e métricas) sem exigir backend
+        de observabilidade agora.
+
+        Regras:
+
+            Habilitar instrumentação via OpenTelemetry de forma parametrizável por profile:
+
+                dsv/hml: pode estar habilitado apontando para um collector opcional
+
+                prd: habilitável com exporter (OTLP) para collector/gateway de observabilidade
+
+            Propagar context (traceId/spanId) e correlationId em:
+
+                entradas HTTP
+
+                saídas HTTP (clients)
+
+                mensageria (quando existir)
+
+        Config:
+
+            Export via OTLP (http/grpc) configurável por env vars
+
+            Se OTel estiver desabilitado, o serviço deve funcionar normalmente
+
+2.12. Segurança (plugável / parametrizável)
+
+    Permitir que TODOS os microsserviços já nasçam com segurança preparada, sem exigir Keycloak ou API Gateway configurados agora
+    Padrão obrigatório
+        Todo microsserviço deve ter Spring Security habilitado
+        O modo de segurança deve ser controlado por configuração (application.yml / env)
+    Modos
+        dev (rápido para desenvolvimento)
+            security.mode=dev
+            Pode operar como:
+                permitAll (sem autenticação), OU
+                token estático/mock (ex.: header Authorization com valor fixo)
+            Ainda assim, manter @PreAuthorize nos endpoints para não “perder” a modelagem
+        oauth2 (produção)
+            security.mode=oauth2
+            Configurar como JWT Resource Server
+            Validar tokens por issuer/JWKS (Keycloak futuro):
+                issuer-uri e/ou jwks-uri
+            Exigir roles (ADMIN/USER) e proteção de endpoints
+    Regras
+        Nenhum microsserviço deve implementar login próprio
+        Gestão de usuários será responsabilidade do Keycloak (futuro)
+        O microsserviço “Identidade e Autenticação”, se existir, NÃO deve gerenciar usuários: ele atua como adaptador e regras da plataforma para identidade (mapeamento de roles, políticas, integrações)
+
+2.13. Integrações entre Microsserviços
+
+    Comunicação via Ports Out
+
+    Clients HTTP isolados em adapters externos
+
+    Configuração explícita de:
+
+        Timeout
+
+        Retry
+
+        Fallback (mínimo como placeholder)
+
+    Políticas por integração (obrigatório):
+
+        Para cada integração (serviço A -> serviço B), implementar comportamento coerente com:
+
+            criticidade e timing (ex.: FAIL_FAST / RETRY / FIRE_AND_FORGET).
+
+        Fallback deve existir ao menos como placeholder documentado.
+
+        Quando aplicável, implementar idempotência (ex.: operações de confirmação/pagamento).
+
+    Nenhuma chamada direta a outro serviço dentro de use case sem port
+
+    Para cada integração descrita no documento de integrações, implementar:
+
+        port out + adapter http
+
+        política por integração: FAIL_FAST / RETRY / FIRE_AND_FORGET
+
+        idempotência quando indicado (ex.: payments→bookings confirm exige idempotência)
+
+    Segurança em integrações (Service-to-Service):
+
+        Toda chamada HTTP para outro microsserviço deve:
+
+            Propagar X-Correlation-Id
+
+            Propagar Authorization (quando security.mode != dev permitAll)
+
+        A validação do serviço chamado deve ocorrer via JWT Resource Server.
+
+        Em produção, o token será emitido via OAuth2 Client Credentials no IdP (Keycloak).
+
+        No modo dev, usar token mockado/estático para permitir desenvolvimento rápido.
+
+2.14. API Gateway / API Management (desenho pronto, sem dependência agora)
+
+    Assumir que existirá um API Gateway na frente dos microsserviços para:
+        API Key, rate limit, roteamento, observabilidade e controles de borda.
+    O microsserviço NÃO deve depender do gateway para funcionar.
+    Em produção, endpoints externos serão expostos via gateway.
+    Endpoints internos (actuator/health/metrics/admin internos) devem ser segregados por rede/perfil e não expostos publicamente.
+
+3. Inputs Assumidos
+
+    O arquivo openapi.yaml existe em:
+    /src/main/resources/openapi/openapi.yaml
+
+    Base path: /api/v1
+
+    O domínio do microsserviço será informado ou substituído manualmente
+
+    Caso o domínio não seja fornecido:
+
+        Criar exemplos genéricos
+
+        Estrutura deve permitir adaptação simples
+
+4. Estrutura de pastas obrigatória (Hexagonal)
+
+Crie exatamente assim (adaptando o nome do serviço):
+
+src/main/java/com/viafluvial/<service>/
+  domain/
+    model/
+    service/
+    event/
+    exception/
+  application/
+    port/
+      in/
+      out/
+    usecase/
+    dto/
+    mapper/
+  adapters/
+    in/
+      web/
+        controller/
+        mapper/
+        dto/
+        exception/
+    out/
+      persistence/
+        entity/
+        repository/
+        mapper/
+      messaging/
+      external/
+  config/
+  common/
+    logging/
+    error/
+    id/
+5. Regras de Implementação
+
+    Cada endpoint do OpenAPI chama exatamente um use case
+
+    Controller faz apenas:
+
+        Autenticação/autorização
+
+        Validação (Bean Validation)
+
+        Mapeamento request → command/query
+
+        Chamada do use case
+
+        Mapeamento result → response
+
+    Use cases:
+
+        Classes claras (CreateXUseCase, ApproveYUseCase)
+
+        Dependem apenas de ports out
+
+    Transações:
+
+        Declaradas no use case
+
+        Nunca no controller
+
+    Persistência:
+
+        Adapter implementa port out
+
+        MapStruct para mapear Domain ↔ JPA
+
+    Domínio:
+
+        Entidades imutáveis quando possível
+
+        Value Objects com validação interna
+
+        Invariantes protegendo o modelo
+
+6. Entregáveis
+
+    Projeto completo compilável
+
+    Comandos:
+
+        ./mvnw test
+
+        ./mvnw spring-boot:run
+
+    Exemplos de testes:
+
+        Domínio
+
+        Use case
+
+        Controller
+
+        Repositório (Testcontainers)
+
+    Automação e Entrega
+
+        Dockerfile
+
+        Docker Compose
+
+        Makefile
+
+        CI/CD GitHub
+
+    README contendo:
+
+        Como rodar local
+
+        Como rodar testes
+
+        Como gerar stubs OpenAPI
+
+        Decisões arquiteturais
+
+Agora gere o código completo seguindo tudo que foi dito acima.

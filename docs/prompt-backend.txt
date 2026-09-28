@@ -1,0 +1,471 @@
+# Prompt Codex - Backend da Central de Engenharia e Operacoes
+
+Voce esta trabalhando no workspace:
+
+`/home/elderson/workarea/workspace/vfa/plataforma-vfa`
+
+Implemente de ponta a ponta o backend da Central de Engenharia e Operacoes. Nao entregue apenas analise ou plano. Inspecione o codigo real, implemente, teste, execute validacoes e apresente ao final os arquivos alterados, comandos executados, resultados e riscos residuais.
+
+## 0. Contratos normativos obrigatorios
+
+Antes de qualquer edicao, leia integralmente, nesta ordem:
+
+1. `via-fluvial-api-engenharia-operacoes/docs/prompt.txt`;
+2. `via-fluvial-api-engenharia-operacoes/docs/engenharia-operacoes.txt`;
+3. `via-fluvial-api-engenharia-operacoes/docs/padroes-projeto-java-spring-boot.txt`;
+4. `via-fluvial-api-engenharia-operacoes/docs/contrato-operacional-para-swagger-openapi.txt`;
+5. `via-fluvial-api-engenharia-operacoes/docs/contrato-operacional-para-migrations-seeds.txt`;
+6. `via-fluvial-api-engenharia-operacoes/docs/contrato-operacional-para-dockerfile-docker-compose-makefile.txt`.
+
+Esses cinco documentos de dominio/padroes/contratos sao somente leitura. Nao os altere. Aplique a precedencia e as decisoes de compatibilidade definidas na secao 0 de `prompt.txt`. Em particular: context path unico `/api/v1`, pacote Java `br.com.viafluvial.engenhariaoperacoes`, porta host `18020`, database `db-engenharia-operacoes`, schema `sc-engenharia-operacoes` e usuario dedicado `engenharia-operacoes_app`.
+
+## 1. Contexto obrigatorio do repositorio
+
+O diretorio `via-fluvial-api-engenharia-operacoes` existe, mas atualmente contem apenas `docs/`. Ele deve se tornar o 20o microsservico do workspace.
+
+Existem 19 APIs Maven que devem ser monitoradas:
+
+| Chave | Nome | Porta local | Base path esperado |
+|---|---|---:|---|
+| identidade-autenticacao | api-identidade-autenticacao | 18001 | /api/v1 |
+| perfis-usuarios | api-perfis-usuarios | 18002 | /api/v1 |
+| compliance | api-compliance | 18003 | /api/v1 |
+| administracao | api-administracao | 18004 | /api/v1 |
+| auditoria | api-auditoria | 18005 | /api/v1 |
+| embarcacoes | api-embarcacoes | 18006 | /api/v1 |
+| tripulacao | api-tripulacao | 18007 | /api/v1 |
+| viagens | api-viagens | 18008 | /api/v1 |
+| reservas | api-reservas | 18009 | verificar diferenca /api e /api/v1 |
+| venda-ingressos | api-venda-ingressos | 18010 | /api/v1 |
+| ticket-suporte | api-ticket-suporte | 18011 | /api/v1 |
+| financeiro | api-financeiro | 18012 | /api/v1 |
+| operacoes-agencia | api-operacoes-agencia | 18013 | /api/v1 |
+| relatorios | api-relatorios | 18014 | /api/v1 |
+| notificacoes | api-notificacoes | 18015 | /api/v1 |
+| suporte | api-suporte | 18016 | /api/v1 |
+| rotas-portos | api-rotas-portos | 18017 | /api/v1 |
+| pagamentos | api-pagamentos | 18018 | /api/v1 |
+| acervo-digital | api-acervo-digital | 18019 | /api/v1 |
+
+A nova API deve usar por padrao:
+
+- nome: `api-engenharia-operacoes`;
+- porta local: `18020`;
+- server servlet context path obrigatorio: `/api/v1`;
+- database compartilhado: `db-engenharia-operacoes`;
+- schema: `sc-engenharia-operacoes`;
+- Java 21;
+- Spring Boot 3.x compativel com os projetos atuais;
+- Maven Wrapper;
+- PostgreSQL + Flyway;
+- OpenAPI 3.1;
+- Spring Security OAuth2 Resource Server com modo local/dev coerente com os projetos existentes;
+- Actuator, Micrometer, correlation ID e logs estruturados.
+
+Nao presuma que todos os POMs usam a mesma versao. Antes de criar o POM, compare pelo menos administracao, auditoria, compliance, pagamentos e acervo-digital. Prefira como projeto-base aquele cuja arquitetura, plugins API-first, seguranca e toolchain sejam mais proximos deste novo servico, nao simplesmente o de maior numero de versao. Registre a decisao e valide o scaffold com Maven antes de ampliar a implementacao.
+
+## 2. Leitura adicional obrigatoria antes de editar
+
+Leia e use como evidencia:
+
+- os seis documentos normativos listados na secao 0;
+- `via-fluvial-app/src/app/config/apiServices.ts`;
+- `docs/microservices-communication-matrix.csv`;
+- `Makefile`;
+- `api-teste.sh`;
+- `docker-compose.shared-db.yml`;
+- `shared-db/init/00-init-vfa-databases.sql`;
+- POM, Dockerfile, docker-compose, application yml, SecurityConfig, CorrelationIdFilter, OpenAPI e estrutura de pacotes dos projetos irmaos selecionados.
+
+Antes da primeira edicao, registre uma sintese curta das decisoes: projeto irmao adotado, versoes escolhidas, convencoes de seguranca, base paths e estrategia de testes.
+
+## 3. Arquitetura obrigatoria
+
+Use arquitetura hexagonal/ports and adapters, sem colocar regra de negocio em controllers ou repositories.
+
+Estrutura esperada, ajustavel aos padroes locais:
+
+```text
+br.com.viafluvial.engenhariaoperacoes
+  domain
+    model
+    service
+  application
+    port.in
+    port.out
+    usecase
+  adapters
+    in.web
+    out.health
+    out.persistence
+    out.audit (opcional e desacoplado)
+  config
+  common
+```
+
+Crie portas explicitas para:
+
+- consultar registry de componentes;
+- executar checks;
+- persistir resultados e snapshots;
+- consultar historico;
+- obter relogio/tempo, quando necessario para testes;
+- publicar auditoria, somente se existir integracao real e sem acoplamento obrigatorio.
+
+Nao acople o dominio a Spring, JPA, HTTP ou DTOs gerados.
+
+## 4. Escopo obrigatorio do MVP
+
+### 4.1. Registry server-side
+
+Implemente um registry configuravel por `application.yml` e variaveis de ambiente. Nao grave segredos no repositorio.
+
+Cada servico deve possuir, no minimo:
+
+- `key` estavel;
+- nome;
+- categoria/dominio;
+- ambiente;
+- enabled;
+- direct base URL;
+- gateway base URL;
+- lista ordenada de candidatos de health;
+- expected transport mode;
+- timeout;
+- tags;
+- dependencias conhecidas.
+
+Use defaults locais para as portas 18001-18019. Para DSV/HML/PRD, URLs devem vir de configuracao. Nao invente endpoints de producao ausentes; retorne `NOT_CONFIGURED`.
+
+Nao reutilize como defaults server-side as URLs de producao hardcoded atualmente no registry do frontend. Em LOCAL, use localhost; nos demais ambientes, uma URL ausente deve permanecer ausente e resultar em `NOT_CONFIGURED`, evitando checks acidentais de PRD durante desenvolvimento.
+
+Nao exponha no DTO publico:
+
+- API keys;
+- bearer tokens;
+- senhas;
+- client secrets;
+- JDBC URLs completas;
+- headers secretos;
+- URL interna quando o perfil nao puder ve-la.
+
+### 4.2. Health checks server-side
+
+Implemente checks HTTP server-side para evitar CORS e evitar que o navegador conheca credenciais tecnicas.
+
+Requisitos:
+
+- use cliente HTTP moderno do Spring compativel com a versao escolhida;
+- timeout de conexao e resposta configuravel;
+- limite global de concorrencia;
+- uma falha nao cancela checks dos demais servicos;
+- nao siga redirects para destinos nao permitidos sem validacao;
+- bloqueie SSRF: somente URLs do registry server-side podem ser consultadas;
+- nao aceite URL arbitraria em requests publicos;
+- propague ou gere `X-Correlation-Id`;
+- nunca registre headers/segredos em logs;
+- interprete payload Actuator `{ "status": "UP" }` quando presente;
+- 401/403 deve ser `AUTH_REQUIRED` ou falha de configuracao, nunca `UP`;
+- 404 em um candidato pode tentar o proximo candidato;
+- timeout/conexao recusada devem ser diferenciados de HTTP 5xx;
+- medir latencia monotonicamente;
+- guardar checkedAt em UTC.
+
+Estados publicos:
+
+- `UP`;
+- `DEGRADED`;
+- `DOWN`;
+- `UNKNOWN`;
+- `DISABLED`;
+- `NOT_CONFIGURED`;
+- `AUTH_REQUIRED`, se mantido como estado; alternativamente use um `reasonCode` obrigatorio.
+
+Execute checks por dois caminhos quando configurados:
+
+- `GATEWAY`;
+- `DIRECT`.
+
+Produza diagnostico deterministico:
+
+- ambos UP: `HEALTHY`;
+- gateway DOWN e direto UP: `GATEWAY_FAILURE`;
+- gateway UP e direto DOWN: `DIRECT_PATH_FAILURE`;
+- ambos DOWN: `BACKEND_OR_NETWORK_FAILURE`;
+- modo esperado diferente do informado pelo frontend: `ROUTE_MISMATCH`;
+- sem configuracao suficiente: `NOT_CONFIGURED`.
+
+Este diagnostico nao deve alterar roteamento nem acionar fallback.
+
+### 4.3. Scheduler e execucao manual
+
+- scheduler configuravel, default razoavel de 30 segundos em DSV;
+- scheduler pode ser desabilitado por ambiente;
+- impedir sobreposicao da mesma rodada;
+- endpoint manual deve retornar identificador da rodada e resultado consistente;
+- proteger execucao manual por autorizacao;
+- evitar tempestade de requests;
+- shutdown gracioso.
+
+### 4.4. Persistencia e Flyway
+
+Siga integralmente `contrato-operacional-para-migrations-seeds.txt`. Regras de bloqueio:
+
+- Flyway e o unico mecanismo de evolucao estrutural;
+- `spring.jpa.hibernate.ddl-auto=validate` em `application.yml` e em todos os profiles, sem `update`, `create` ou `create-drop`;
+- migrations estruturais em `src/main/resources/db/migration`, na faixa `V001-V099`;
+- uma responsabilidade estrutural por migration, uma tabela por arquivo e migration propria para funcao/trigger de `updated_at`;
+- seeds DSV em `src/main/resources/db/seed/dsv`, na faixa `V101-V199`, um arquivo por tabela, idempotentes e LGPD-safe;
+- nao usar prefixo `S` nem repeatable migration para seeds;
+- DSV usa `classpath:db/migration,classpath:db/seed/dsv`; HML/PRD usam somente `classpath:db/migration`;
+- migrations aplicadas sao imutaveis e alteracoes futuras sao incrementais;
+- constraints, indices, integridade referencial e colunas `created_at`/`updated_at` devem refletir o dominio;
+- disponibilize README e relatorio executavel de qualidade da massa, incluindo volume, distribuicao e validacoes temporais/documentais aplicaveis.
+
+Crie modelos separados para configuracao logica e resultado historico. Como minimo:
+
+- `service_component` ou registry persistido apenas se houver vantagem sobre config; nao duplique sem necessidade;
+- `health_check_run`;
+- `health_check_result`;
+- `frontend_runtime_snapshot`;
+- opcionalmente `operational_event` para eventos de mudanca de status.
+
+O historico deve guardar somente dados tecnicos sanitizados:
+
+- service key;
+- environment;
+- route type;
+- status;
+- reason code;
+- HTTP status;
+- latency ms;
+- checked at;
+- resumo de erro limitado e sem segredo;
+- run id.
+
+Implemente indices para consultas por ambiente, servico e tempo. Implemente retencao configuravel de dados detalhados, com default conservador (por exemplo, 7 ou 15 dias), sem cron destrutivo nao testado.
+
+Atualize `shared-db/init/00-init-vfa-databases.sql` para criar database/schema de engenharia de forma idempotente. No compose dedicado, use o usuario `engenharia-operacoes_app`; no shared DB local, siga o usuario real do orquestrador raiz por override de ambiente, sem hardcode de credencial no codigo.
+
+### 4.5. Snapshot do frontend
+
+Crie contrato para o frontend informar sua configuracao efetiva sanitizada:
+
+- application name;
+- environment declarado;
+- transport mode `BACKEND` ou `GATEWAY`;
+- runtime config presente ou nao;
+- build version/commit quando disponiveis;
+- lista de service keys habilitadas;
+- timestamp do cliente apenas informativo;
+- timestamp do servidor autoritativo.
+
+Use um request fechado equivalente a:
+
+```json
+{
+  "application": "via-fluvial-app",
+  "environment": "LOCAL",
+  "transportMode": "BACKEND",
+  "runtimeConfigPresent": true,
+  "buildVersion": "1.0.0",
+  "buildCommit": "abc1234",
+  "enabledServiceKeys": ["viagens", "reservas", "pagamentos"],
+  "clientTimestamp": "2026-08-08T19:00:00Z"
+}
+```
+
+Enums, quantidade e tamanho das strings/lista devem ser validados. Campos desconhecidos devem ser ignorados ou rejeitados de modo consistente com a configuracao Jackson escolhida; em nenhum caso devem ser persistidos dinamicamente.
+
+Nao aceite nem persista URL arbitraria, API key, token, cookie ou header. Use allowlist de campos e limite de tamanho. O snapshot nao controla roteamento; serve apenas para diagnostico.
+
+### 4.6. Matriz de dependencias
+
+Use `docs/microservices-communication-matrix.csv` como evidencia inicial. Diferencie:
+
+- dependencia ativa confirmada;
+- integracao apenas configurada;
+- destino nao mapeado;
+- componente de plataforma.
+
+Nao transforme linhas de baixa confianca em dependencia ativa. Exponha a fonte/evidence status no DTO, sem paths internos desnecessarios para usuarios sem permissao.
+
+## 5. Contrato REST/OpenAPI
+
+Siga integralmente `contrato-operacional-para-swagger-openapi.txt` e a estrategia API-first de `padroes-projeto-java-spring-boot.txt`:
+
+- contrato fonte em `src/main/resources/openapi/openapi.yaml` usando OpenAPI 3.1;
+- copia estatica versionada e sincronizada em `src/main/resources/static/openapi/openapi.yaml`;
+- interfaces e DTOs gerados em `target/generated-sources`; arquivos gerados nao podem ser editados;
+- teste automatico de paridade entre contrato estatico, runtime Springdoc e mappings implementados;
+- `server.servlet.context-path=/api/v1` como unico prefixo efetivo;
+- paths do OpenAPI e controllers sem `/api/v1`, impedindo `/api/v1/api/v1/*`;
+- runtime em `/api/v1/v3/api-docs`, YAML em `/api/v1/openapi/openapi.yaml` e Swagger UI em `/api/v1/swagger-ui/index.html`;
+- Swagger UI com seletor entre `OpenAPI Runtime` e `OpenAPI Estatico`;
+- `bearerAuth` JWT e security requirement global nas duas fontes;
+- exatamente tres servers: `/api/v1`, `https://api-engenharia-operacoes.hml.viafluvial.com.br/api/v1` e `https://api-engenharia-operacoes.prd.viafluvial.com.br/api/v1`;
+- tag, operationId, summary, description, parametros, exemplos, responses e security completos por operacao;
+- description, tipo/format, exemplo, required e constraints completos por campo de schema.
+
+Endpoints minimos, podendo ajustar nomes para consistencia:
+
+```text
+GET  /engineering/overview?environment=DSV
+GET  /engineering/services?environment=DSV&status=UP&category=...
+GET  /engineering/services/{serviceKey}?environment=DSV
+GET  /engineering/services/{serviceKey}/history?environment=DSV&from=...&to=...
+GET  /engineering/dependencies?environment=DSV
+GET  /engineering/runs/{runId}
+POST /engineering/checks/run
+GET  /engineering/frontend-runtime/latest?environment=DSV
+POST /engineering/frontend-runtime
+```
+
+Contratos devem incluir:
+
+- schemas e enums completos;
+- exemplos;
+- paginacao para historico;
+- Problem Details ou modelo de erro consistente;
+- validacao de environment;
+- limites de intervalo temporal;
+- `X-Correlation-Id` documentado;
+- nenhum segredo nos exemplos.
+
+Evite endpoint generico de proxy e endpoint que receba URL para testar.
+
+## 6. Seguranca e acesso
+
+Reutilize papeis existentes; nao dependa de alteracao imediata no Keycloak:
+
+- leitura: `ADMINISTRADOR`, `AUDITOR`, `SUPORTE`;
+- execucao manual: `ADMINISTRADOR`;
+- alteracoes futuras de configuracao: `ADMINISTRADOR`.
+
+Confirme o prefixo real das roles nos SecurityConfigs antes de escrever `@PreAuthorize`.
+
+Implemente e teste o mapeamento das claims JWT/Keycloak para authorities Spring. O frontend usa nomes como `ADMINISTRADOR`, enquanto Spring normalmente avalia `ROLE_ADMINISTRADOR`; normalize em um unico ponto e garanta que o modo dev e o modo OAuth2 produzam as mesmas authorities sem duplicar `ROLE_ROLE_`.
+
+Requisitos:
+
+- OAuth2 em HML/PRD;
+- modo dev coerente com os projetos existentes e configuravel;
+- endpoints de Actuator publicos somente conforme padrao seguro existente;
+- CSRF/stateless conforme arquitetura atual;
+- CORS por allowlist de ambiente via propriedade/env, por exemplo `app.cors.allowed-origins` alimentada por `APP_CORS_ALLOWED_ORIGINS`, com defaults localhost apenas em DSV;
+- nenhuma credencial default de producao;
+- logs e respostas sanitizados;
+- validacao contra mass assignment no snapshot;
+- rate limiting simples da execucao manual se houver suporte local; caso contrario, controle de rodada em andamento e documente o limite.
+
+## 7. Fallback e cores operacionais
+
+Nao implemente fallback Gateway -> backend direto no navegador nem nesta API agregadora.
+
+A API apenas reporta:
+
+- rota esperada;
+- rotas testadas;
+- resultados;
+- divergencia;
+- estado de contingencia vindo de uma fonte/configuracao confiavel, se existir.
+
+`FALLBACK_ACTIVE` somente pode aparecer se houver declaracao controlada de infraestrutura. Nao inferir que o trafego mudou apenas porque gateway falhou e direto respondeu.
+
+Nunca recomendar fallback para 400, 401, 403, 404, validacao ou erro de negocio. Falhas candidatas a contingencia se limitam a timeout, conexao, DNS e 502/503/504, mas a ativacao fica fora deste MVP.
+
+## 8. Integracao operacional do workspace
+
+Siga integralmente `contrato-operacional-para-dockerfile-docker-compose-makefile.txt`, substituindo todos os placeholders pelos parametros de Engenharia de Operacoes. Preserve o formato exigido pelo contrato e valide contra o projeto real. O Dockerfile deve ser multi-stage JDK/JRE 21 e produzir o artifact `api-engenharia-operacoes`; o compose dedicado deve conter somente `api-engenharia-operacoes` e `postgres-engenharia-operacoes`, volume nomeado e porta host `18020`; o Makefile local deve conter todos os targets previstos no contrato e usar os nomes reais desses services.
+
+O compose dedicado usa `db-engenharia-operacoes`, `sc-engenharia-operacoes` e `engenharia-operacoes_app`. Quando iniciado pelo orquestrador raiz com `USE_SHARED_DB=true`, aceite override para host `172.17.0.1`, porta `15432` e credenciais do shared DB, sem subir o PostgreSQL dedicado.
+
+Crie/ajuste:
+
+- `pom.xml`, `.mvn`, `mvnw`, `mvnw.cmd`;
+- `Dockerfile`;
+- `docker-compose.yml` usando shared DB quando configurado;
+- `Makefile` local do servico;
+- `README.md` com setup, env vars, endpoints e comandos;
+- `application.yml`, `application-dsv.yml`, `application-hml.yml`, `application-prd.yml`;
+- migrations Flyway;
+- OpenAPI;
+- root `Makefile`, incluindo pagamentos e engenharia-operacoes no inventario correto;
+- `api-teste.sh`, adicionando chave, porta 18020, database e schema;
+- scripts de validacao apenas se reutilizaveis.
+
+Nao copie artefatos `target`, logs, caches, dados ou `.git` de outro projeto.
+
+## 9. Testes obrigatorios
+
+Implemente e execute:
+
+### Unitarios
+
+- classificacao de status;
+- diagnostico gateway versus direto;
+- 401/403 nao sao UP;
+- fallback de candidatos somente para paths permitidos;
+- timeout e erros de rede;
+- sanitizacao de erro;
+- validacao do snapshot;
+- retencao;
+- matriz de dependencia.
+
+### Integracao
+
+- persistence adapter com PostgreSQL/Testcontainers, se Docker estiver disponivel;
+- migrations Flyway;
+- controller/security com MockMvc;
+- cliente de health contra servidor HTTP fake controlado;
+- rodada parcial com um servico UP e outro indisponivel;
+- OpenAPI/contrato.
+
+### Validacao executavel
+
+- `./mvnw test`;
+- `./mvnw verify` quando viavel;
+- build da imagem ou validacao do Docker Compose;
+- subir banco compartilhado e API;
+- validar `/api/v1/actuator/health`;
+- validar `/api/v1/swagger-ui/index.html`;
+- validar `/api/v1/v3/api-docs`;
+- validar `/api/v1/openapi/openapi.yaml`;
+- rejeitar a entrega se qualquer rota contiver `/api/v1/api/v1`;
+- validar overview com usuario autorizado em modo dev;
+- validar 401/403 para acesso sem permissao;
+- validar que nenhuma resposta contem segredo.
+
+Nao mascare testes com `maven.test.skip=true` para declarar conclusao.
+
+## 10. Definicao de pronto
+
+O backend esta pronto somente quando:
+
+- os cinco documentos protegidos da secao 0 permanecem inalterados;
+- o projeto compila do zero;
+- a API sobe na porta 18020;
+- usa `db-engenharia-operacoes`/`sc-engenharia-operacoes` no banco compartilhado;
+- o compose dedicado usa `engenharia-operacoes_app` e o shared DB funciona por override coerente com o orquestrador raiz;
+- Dockerfile, compose e Makefile atendem integralmente ao contrato operacional e seus checks executaveis;
+- migrations estruturais e seeds respeitam faixas, diretorios e profiles do contrato Flyway, com `ddl-auto=validate`;
+- os 19 servicos estao no registry local;
+- uma API indisponivel nao derruba a rodada;
+- gateway e direto sao medidos separadamente;
+- overview/detalhe/historico/dependencias/snapshot funcionam;
+- autorizacao e sanitizacao foram testadas;
+- OpenAPI runtime e estatico estao consistentes com a implementacao, Swagger alterna entre ambos e nao existe prefixo duplicado;
+- root scripts reconhecem pagamentos e engenharia-operacoes;
+- testes passam;
+- README explica limites do MVP e deixa claro que nao existe fallback automatico.
+
+## 11. Forma de trabalho
+
+- preserve alteracoes preexistentes do usuario;
+- nao reverta arquivos fora do escopo;
+- prefira pequenas mudancas testaveis;
+- use os padroes existentes antes de criar abstracoes novas;
+- nao invente integracoes ou resultados;
+- quando uma capacidade depender de credencial/infra ausente, implemente porta/adaptador opcional e retorne `NOT_CONFIGURED`;
+- trate causa raiz de falhas de build/teste relacionadas ao trabalho;
+- termine com relatorio objetivo de implementacao e evidencia de validacao.

@@ -1,0 +1,250 @@
+Você é um Arquiteto/Engenheiro de Software Sênior e deve implementar o padrão de banco de dados com migrations e seeds para um microsserviço Java 21 + Spring Boot 3.x, com PostgreSQL e Flyway, seguindo contrato operacional rígido e compatível com o funcionamento real do Flyway.
+
+OBJETIVO
+
+Implementar persistência:
+
+    Implementar persistência:
+
+        Versionada
+
+        Rastreável
+
+        Determinística
+
+        Reprodutível
+
+        Com comportamento previsível por ambiente (dsv/hml/prd)
+
+    Com separação clara entre:
+
+        Evolução estrutural do schema
+
+        Carga de dados sintéticos de desenvolvimento
+
+        Governança por profile sem violar regras de domínio
+
+CONTRATO ARQUITETURAL
+
+    Banco dedicado por microsserviço (modelo 1:1)
+
+    Schema próprio do domínio
+
+    Flyway como único mecanismo de versionamento
+
+    JPA/Hibernate obrigatoriamente com:
+        spring.jpa.hibernate.ddl-auto=validate
+
+    É proibido update, create, create-drop
+
+    SQL-first obrigatório (nunca gerar estrutura automática via Hibernate)
+
+    Scripts devem ser auditáveis, legíveis e determinísticos
+
+PADRÃO OFICIAL FLYWAY (OBRIGATÓRIO)
+
+    O Flyway reconhece apenas:
+
+        Versioned migrations → V<versao>__descricao.sql
+
+        Repeatable migrations → R__descricao.sql
+    Não existe prefixo S nativo no Flyway
+    Não inventar prefixos customizados
+
+PADRÃO ADOTADO NESTE PROJETO
+
+Para manter compatibilidade com Flyway e separar semanticamente estrutura de seeds:
+
+    Estrutura do banco:
+        Faixa reservada: V001 até V099
+
+        Regra:
+
+            1 responsabilidade estrutural por migration
+
+            Não agrupar múltiplas tabelas
+
+            Alterações futuras sempre incrementais
+    Seeds de desenvolvimento (DSV):
+        Faixa reservada: V101 até V199
+
+        Importante:
+
+            Seeds continuam sendo versioned migrations válidas
+
+            Não usar prefixo S
+
+            Não usar repeatable para seeds
+
+            Diferenciação ocorre pela faixa numérica reservada
+
+ORGANIZAÇÃO DE DIRETÓRIOS
+
+    db/migration:
+        migrations estruturais (V001–V099)
+    db/seed/dsv
+        seeds desenvolvimento (V101–V199)
+
+CONFIGURAÇÃO POR PROFILE
+
+    dsv:
+        spring.flyway.locations=classpath:db/migration,classpath:db/seed/dsv
+
+        Executa:
+
+            Estrutura
+
+            Seeds
+    hml / prd:
+        spring.flyway.locations=classpath:db/migration
+
+        Executa:
+
+            Apenas estrutura
+    Seeds jamais executam em hml ou prd
+
+REGRAS DE MIGRATION (OBRIGATÓRIAS)
+
+    Imutáveis após aplicadas
+
+    Incrementais
+
+    PK, FK, UNIQUE, CHECK e índices declarados corretamente
+
+    Colunas de auditoria:
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+
+    Trigger para auto-update de updated_at deve estar em migration própria
+
+    Tipos e constraints devem refletir invariantes reais do domínio
+
+REGRAS DE SEED (OBRIGATÓRIAS)
+
+    Executam apenas no profile dsv
+
+    Dados sintéticos realistas
+
+    Idempotentes
+
+    Proibido inserir:
+
+        CPF inválido
+
+        CNPJ inválido
+
+        Documentos com dígitos repetidos
+
+        Datas que violem regra temporal
+
+    Massa deve conter:
+
+        Distribuição estatística mínima
+
+        Cenários comuns
+
+        Cenários de borda
+
+        Status variados
+
+        Datas coerentes (created_at <= confirmed_at <= updated_at)
+
+    Pipeline deve falhar se houver:
+
+        Documento inválido
+
+        Violação temporal
+
+        Quebra de integridade referencial
+
+PADRÃO OPERACIONAL POR AMBIENTE
+
+    Ambiente:
+        dsv:
+            atende estrutura
+            atende seeds
+        hml
+            atende estrutura
+        prd
+            atende estrutura
+    Profile altera apenas comportamento técnico, nunca regra de domínio
+
+QUALIDADE E GOVERNANÇA
+
+    Build deve falhar se ddl-auto=validate detectar divergência
+
+    Nunca editar migration já aplicada
+
+    Nunca fazer big-bang migration
+
+    Ordem sempre definida pela versão Flyway
+
+    Seeds usam faixa alta para garantir execução após estrutura
+
+    Observabilidade mínima no startup para log de execução Flyway
+
+CRITÉRIOS DE ACEITE
+
+    Migration inicial de schema existe
+
+    Tabela por migration
+
+    Trigger/função em migration dedicada
+
+    Seeds isolados no profile dsv
+
+    hml/prd não executam seeds
+
+    Seeds idempotentes
+
+    Dados sintéticos e LGPD-safe
+
+    JPA validate ativo
+
+    Uso de variáveis de ambiente
+
+    Reprodutível em ambiente limpo
+
+    100% CPF/CNPJ válidos
+
+    Nenhuma violação temporal
+
+    Integridade referencial garantida
+
+    Massa volumosa e estatisticamente distribuída
+
+MOTIVAÇÃO DA FAIXA V10X
+
+    A faixa V10X é uma convenção de projeto (não do Flyway) para:
+
+        Manter execução automática via Flyway
+
+        Evitar prefixos não suportados
+
+        Diferenciar visualmente estrutura vs seed
+
+        Preservar ordenação previsível
+
+        Garantir governança sem customização do Flyway
+
+ENTREGÁVEIS ESPERADOS
+
+    Configuração Flyway por profile
+
+    Conjunto V001–V0XX estrutural
+
+    Conjunto V10X seed dsv
+
+    README explicando execução
+
+    Relatório de qualidade da massa contendo:
+
+        Volume por tabela
+
+        Distribuição estatística
+
+        Validação CPF/CNPJ
+
+        Validação temporal
+
+        Cenários de borda

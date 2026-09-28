@@ -1,0 +1,396 @@
+# Prompt Codex - Frontend da Central de Engenharia e Operacoes
+
+Voce esta trabalhando no workspace:
+
+`/home/elderson/workarea/workspace/vfa/plataforma-vfa`
+
+Implemente de ponta a ponta a area frontend da Central de Engenharia e Operacoes dentro do frontend existente `via-fluvial-app`. Nao entregue apenas mock, layout ou plano. Integre com a API criada pelo `prompt-backend.txt`, preserve o design system e a navegacao atuais, escreva testes e execute build.
+
+## 1. Pre-condicao
+
+Antes de editar:
+
+1. leia `via-fluvial-api-engenharia-operacoes/docs/prompt.txt` e aplique a precedencia da secao 0;
+2. leia, sem alterar, `engenharia-operacoes.txt`, `padroes-projeto-java-spring-boot.txt`, `contrato-operacional-para-swagger-openapi.txt`, `contrato-operacional-para-migrations-seeds.txt` e `contrato-operacional-para-dockerfile-docker-compose-makefile.txt` da mesma pasta;
+3. leia `prompt-backend.txt` e o OpenAPI efetivamente implementado pela nova API;
+4. confirme que a API sobe em `http://localhost:18020/api/v1` e que runtime OpenAPI, YAML estatico e Swagger respondem nos paths normativos;
+5. inspecione os componentes administrativos, permissions, services e testes existentes;
+6. registre uma sintese curta do contrato encontrado e dos pontos de integracao.
+
+Os cinco documentos protegidos listados em `prompt.txt` sao somente leitura. O frontend nao pode compensar divergencias de backend duplicando `/api/v1`, reconstruindo paths alternativos ou criando um contrato proprio.
+
+Se o backend ainda nao estiver implementado, nao invente um contrato divergente. Use o OpenAPI definido no prompt backend como base, documente a dependencia e mantenha o client isolado para regeneracao.
+
+## 2. Contexto real do frontend
+
+O frontend usa:
+
+- React 18 + TypeScript;
+- Vite 6;
+- Vitest + Testing Library;
+- Tailwind e componentes locais baseados em Radix;
+- MUI em partes da aplicacao;
+- `lucide-react` para icones;
+- `openapi-fetch` e tipos gerados para APIs;
+- `AppView` e `PlatformAdminDashboard`, em vez de uma migracao ampla para outro router;
+- matriz de acesso em `src/app/auth/profileAccessMatrix.json`;
+- registry em `src/app/config/apiServices.ts`;
+- configuracao runtime em `src/app/config/runtimeConfig.ts`;
+- client HTTP central em `src/app/services/httpClient.ts`.
+
+Existe um painel flutuante de health em `src/app/App.tsx`, visivel apenas em DEV. Ele consulta os Actuators diretamente do navegador. Esse codigo e uma prova de conceito e deve ser extraido/evoluido para a nova area. Nao mantenha duas fontes concorrentes de health.
+
+## 3. Objetivo de produto
+
+Adicionar `Engenharia e Operacoes` como view da Administracao da Plataforma, semelhante as areas existentes de auditoria, suporte e gateways de pagamento.
+
+A area deve permitir:
+
+- ver o estado consolidado dos 19 microsservicos;
+- filtrar por LOCAL/DSV/HML/PRD;
+- identificar se cada check foi feito por Gateway ou diretamente pelo backend agregador;
+- ver o modo efetivo de acesso do frontend atual: backend direto ou gateway;
+- identificar divergencia entre ambiente/rota esperados e detectados;
+- diferenciar gateway indisponivel de backend indisponivel;
+- ver latencia, ultima verificacao e dados antigos;
+- consultar historico e dependencias;
+- executar uma nova rodada quando autorizado;
+- visualizar contingencia em laranja somente quando declarada pela infraestrutura;
+- nunca exibir segredos nem ativar fallback no navegador.
+
+## 4. Integracao no registry e client
+
+### 4.1. Registrar a nova API
+
+Adicione `engenhariaOperacoes` a `ApiServiceKey` e ao registry em `src/app/config/apiServices.ts`.
+
+Defaults locais:
+
+- backend URL: `http://localhost:18020/api/v1`;
+- runtime OpenAPI: `http://localhost:18020/api/v1/v3/api-docs`;
+- YAML estatico: `http://localhost:18020/api/v1/openapi/openapi.yaml`;
+- Swagger UI: `http://localhost:18020/api/v1/swagger-ui/index.html`;
+- gateway URL: somente um valor real/configuravel; nao invente URL de producao se nao estiver confirmada;
+- prefixo: `VIA_FLUVIAL_API_ENGENHARIA_OPERACOES`.
+
+O `backendUrl` ja contem `/api/v1`; paths passados ao client gerado nao podem repetir esse prefixo. Adicione teste que falhe se uma URL final contiver `/api/v1/api/v1`.
+
+Nao inclua a propria API de engenharia na contagem dos 19 servicos de negocio monitorados, salvo se o backend a retornar explicitamente como componente de plataforma separado.
+
+### 4.2. Client API-first
+
+- gere tipos TypeScript a partir do contrato OpenAPI versionado e confirme paridade com `/api/v1/v3/api-docs` antes do build;
+- crie `src/app/integrations/engenharia-operacoes/` seguindo os wrappers existentes;
+- adicione script `generate:openapi:engenharia-operacoes` e inclua-o no agregador quando isso nao quebrar execucoes offline existentes;
+- use `openapi-fetch`/factory existente;
+- nao duplique fetch/auth/query parsing;
+- use `AbortSignal` para requests cancelaveis;
+- preserve `X-Correlation-Id` quando o client central oferecer suporte.
+- nao edite manualmente tipos gerados nem duplique DTOs OpenAPI em tipos de UI.
+
+## 5. Permissoes e navegacao
+
+Adicione a view `engineering` a:
+
+- `PlatformView` em `src/app/auth/permissions.ts`;
+- `profileAccessMatrix.json`;
+- `AdminView`, menu, secoes e renderizacao de `PlatformAdminDashboard`.
+
+Permissao inicial de leitura:
+
+- `ADMINISTRADOR`;
+- `AUDITOR`;
+- `SUPORTE`.
+
+Execucao manual de checks:
+
+- exibir habilitada somente para `ADMINISTRADOR`;
+- backend continua sendo a autoridade final;
+- para demais perfis, ocultar ou desabilitar com tooltip objetivo.
+
+Use icone Lucide adequado, por exemplo `Activity`, `ServerCog` ou `Gauge`. Nao desenhe SVG manual.
+
+Nao crie nova area top-level fora do admin sem necessidade. Preserve persistencia da view/scroll e comportamento responsivo existentes.
+
+## 6. Estrutura de componentes
+
+Crie uma pasta coesa, por exemplo:
+
+```text
+src/app/components/platform-admin/engineering/
+  EngineeringOperations.tsx
+  EngineeringOverview.tsx
+  ServicesTable.tsx
+  ServiceDetailsPanel.tsx
+  RoutingStatus.tsx
+  DependencyMap.tsx
+  HealthHistory.tsx
+  FrontendRuntimeStatus.tsx
+  engineering.types.ts (somente tipos de UI, nao duplicar OpenAPI)
+  engineering.utils.ts
+  __tests__/
+```
+
+Evite um componente monolitico e nao aumente ainda mais `App.tsx`.
+
+## 7. Experiencia e layout
+
+A tela e uma ferramenta operacional, nao uma landing page. Use layout denso, escaneavel e coerente com `PlatformAdminDashboard`.
+
+### 7.1. Cabecalho operacional
+
+Mostrar:
+
+- titulo `Engenharia e Operacoes`;
+- seletor de ambiente;
+- ultima atualizacao;
+- indicador de dados antigos;
+- botao de atualizar;
+- botao de executar rodada para ADMINISTRADOR;
+- estado da propria API agregadora.
+
+Nao coloque textos longos explicando a funcionalidade dentro da tela.
+
+### 7.2. Resumo
+
+Indicadores compactos:
+
+- total monitorado;
+- UP;
+- DEGRADED;
+- DOWN;
+- UNKNOWN/NOT_CONFIGURED;
+- falhas provaveis de gateway;
+- divergencias de rota;
+- contingencias declaradas.
+
+As contagens devem vir dos dados da API, nao de valores hardcoded.
+
+### 7.3. Tabela principal
+
+Priorize tabela/lista para comparacao, com colunas:
+
+- servico;
+- dominio;
+- status consolidado;
+- gateway;
+- direto;
+- rota esperada;
+- diagnostico;
+- latencia;
+- ultima verificacao;
+- acao de detalhes.
+
+Permita:
+
+- busca textual;
+- filtro de status;
+- filtro de categoria;
+- ordenacao por gravidade, nome, latencia e ultima verificacao;
+- responsividade sem overflow incoerente;
+- versao mobile em linhas empilhadas ou tabela com scroll controlado.
+
+Nao use cards aninhados. Cards somente para indicadores ou itens repetidos quando fizer sentido.
+
+### 7.4. Detalhes do servico
+
+Abrir painel lateral ou secao dedicada com:
+
+- resumo sanitizado;
+- resultado gateway;
+- resultado direto;
+- reason code e mensagem segura;
+- candidatos de health sem credenciais;
+- ambiente;
+- dependencias e impacto potencial;
+- historico recente;
+- correlation ID da rodada, se fornecido;
+- fonte e idade do dado.
+
+URLs internas so podem ser mostradas se o backend explicitamente autorizar e devolver o campo. O frontend nao deve reconstruir URL secreta a partir de configuracao.
+
+### 7.5. Rotas e frontend runtime
+
+Mostre duas coisas distintas:
+
+1. `Expected/observed routing` retornado pelo backend;
+2. configuracao efetiva do frontend atual.
+
+A configuracao do frontend deve usar funcoes existentes:
+
+- `getApiTransportMode()`;
+- `hasRuntimeConfig()`;
+- `getEnabledApiServices()`;
+- valores publicos de versao/commit/ambiente, quando configurados.
+
+Envie snapshot sanitizado ao backend, no maximo uma vez por sessao/build ou quando houver mudanca relevante. Nao envie:
+
+- API keys;
+- bearer tokens;
+- cookies;
+- headers;
+- URLs internas completas;
+- conteudo de localStorage/sessionStorage;
+- dados pessoais.
+
+Exiba:
+
+- modo `GATEWAY` ou `BACKEND`;
+- origem da configuracao `runtime`, `build` ou `default`, se puder ser determinada sem alterar contrato global de forma perigosa;
+- ambiente declarado;
+- quantidade de servicos habilitados;
+- versao/commit, quando presentes;
+- divergencia detectada pelo backend.
+
+## 8. Semantica visual obrigatoria
+
+Use cor + texto + icone; nunca somente cor.
+
+- verde: `UP`/normal;
+- amarelo: `DEGRADED`/atencao;
+- laranja: `FALLBACK_ACTIVE` ou contingencia declarada;
+- vermelho: `DOWN`/falha;
+- cinza: `UNKNOWN`, `DISABLED`, `NOT_CONFIGURED`;
+- azul: manutencao planejada, somente se o backend suportar.
+
+Nao pinte de laranja apenas porque o acesso atual e direto em LOCAL/DSV. Direto pode ser o modo esperado. Laranja representa desvio/contingencia real.
+
+Use texto em pt-BR, mas preserve enums tecnicos em tooltips/detalhes quando util.
+
+## 9. Polling, desempenho e estados
+
+- polling default entre 20 e 30 segundos, configuravel;
+- polling somente enquanto a view de engenharia estiver ativa e a aba visivel;
+- pausar quando `document.visibilityState !== 'visible'`;
+- cancelar request anterior ao trocar ambiente/desmontar;
+- impedir rodadas manuais duplicadas;
+- nao fazer polling de cada microsservico pelo browser;
+- buscar apenas a API agregadora;
+- manter ultimo dado valido durante refresh;
+- marcar stale com threshold configuravel;
+- usar `useDeferredValue` para busca/filtros se a lista crescer;
+- nao adicionar `useMemo`/`useCallback` indiscriminadamente; siga o padrao e o React Compiler do projeto.
+
+Estados obrigatorios:
+
+- loading inicial;
+- refresh silencioso;
+- erro total da agregadora;
+- dados parciais;
+- vazio;
+- stale;
+- sem permissao;
+- ambiente nao configurado;
+- rodada em progresso;
+- snapshot de frontend recusado sem quebrar a tela.
+
+## 10. Remocao da duplicacao em App.tsx
+
+Refatore o painel flutuante DEV existente:
+
+- primeiro implemente e valide a view `engineering` consumindo a API agregadora; somente depois remova de `App.tsx` a execucao direta de checks dos 19 Actuators;
+- mova tipos/utilitarios reutilizaveis para modulos proprios apenas se ainda forem necessarios;
+- preferencialmente substitua o painel flutuante por um atalho DEV para a view `engineering`, ou remova-o se a area dedicada cobrir o caso;
+- nao deixe intervalos, AbortControllers ou estados mortos;
+- preserve outras ferramentas DEV/JWT nao relacionadas;
+- garanta que o bundle nao mantenha duas implementacoes concorrentes.
+
+## 11. Fallback e seguranca
+
+Proibido:
+
+- trocar automaticamente `gatewayUrl` por `backendUrl` depois de falha;
+- repetir mutacoes em outra rota;
+- fazer fallback em 400/401/403/404;
+- expor `X-Gravitee-Api-Key`;
+- mostrar token JWT integral;
+- inserir `dev-token` literal;
+- criar actorId `system` ou usuario fake;
+- inferir contingencia sem contrato do backend;
+- aceitar URL digitada pelo usuario para health check.
+
+O comando `npm run check:no-fallback` deve passar.
+
+Se futuramente houver fallback, ele sera feito na infraestrutura/proxy/segundo gateway. A UI apenas exibira o estado recebido.
+
+## 12. Testes obrigatorios
+
+Use Vitest e Testing Library. Cubra no minimo:
+
+- permissao da view para ADMINISTRADOR/AUDITOR/SUPORTE;
+- negacao para perfis sem acesso;
+- renderizacao de loading, vazio, erro e stale;
+- contagens do overview;
+- filtros e ordenacao;
+- semantica de cores/textos;
+- gateway DOWN + direto UP resulta em diagnostico de gateway, nao em fallback frontend;
+- contingencia laranja somente com `FALLBACK_ACTIVE` explicito;
+- execucao manual apenas para ADMINISTRADOR;
+- troca de ambiente cancela request anterior;
+- polling pausa em aba oculta e termina no unmount;
+- snapshot nao inclui segredos;
+- detalhes nao exibem campos ausentes/restritos;
+- integracao do menu e persistencia de view;
+- remocao da logica antiga nao regressa ferramentas DEV restantes.
+
+Nao use apenas snapshots visuais; prefira assercoes de comportamento e acessibilidade.
+
+## 13. Validacao executavel
+
+Execute e corrija falhas relacionadas ao trabalho:
+
+```bash
+cd via-fluvial-app
+npm run check:no-fallback
+npm test
+npm run build
+```
+
+Valide tambem, antes do teste integrado:
+
+- `GET http://localhost:18020/api/v1/actuator/health` retorna 200;
+- `GET http://localhost:18020/api/v1/v3/api-docs` retorna 200;
+- `GET http://localhost:18020/api/v1/openapi/openapi.yaml` retorna 200;
+- nenhuma request do frontend contem `/api/v1/api/v1`.
+
+Com o backend ativo:
+
+- abrir a view como ADMINISTRADOR;
+- validar LOCAL/DSV;
+- testar um servico UP e um indisponivel;
+- validar refresh e rodada manual;
+- confirmar que Network mostra chamadas apenas para api-engenharia-operacoes para o painel;
+- confirmar ausencia de API keys/tokens em payloads e DOM;
+- verificar console sem erros;
+- verificar desktop e mobile com screenshot/Playwright se disponivel.
+
+Nao declare validacao visual concluida sem realmente executa-la.
+
+## 14. Definicao de pronto
+
+O frontend esta pronto somente quando:
+
+- `Engenharia e Operacoes` aparece no menu administrativo autorizado;
+- a view consome o backend real e tipos OpenAPI;
+- os 19 servicos aparecem conforme retorno da API;
+- gateway e direto sao mostrados separadamente;
+- modo efetivo do frontend aparece sanitizado;
+- nenhum fallback automatico foi criado;
+- nao ha health polling direto dos 19 servicos em `App.tsx`;
+- filtros, detalhes, historico e dependencias funcionam;
+- estados de erro/parcial/stale estao tratados;
+- permissoes funcionam em UI e backend;
+- testes, politica no-fallback e build passam;
+- layout funciona em desktop e mobile;
+- nenhuma credencial aparece no DOM, logs ou requests de snapshot.
+
+## 15. Forma de trabalho
+
+- preserve alteracoes existentes do usuario;
+- nao refatore areas nao relacionadas;
+- siga componentes, spacing, tipografia e padroes do admin atual;
+- use icones Lucide em botoes e tooltips em icones menos obvios;
+- mantenha controles com dimensoes estaveis;
+- evite cards decorativos e textos explicativos excessivos;
+- implemente em pequenas etapas com validacao focada;
+- termine com resumo dos arquivos alterados, testes executados, resultados e qualquer dependencia residual do backend/infra.
