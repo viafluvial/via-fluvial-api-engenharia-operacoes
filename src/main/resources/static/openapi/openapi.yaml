@@ -4,8 +4,8 @@ info:
   version: 1.0.0
   description: API responsavel por engenharia e operacoes, incluindo monitoramento operacional, rotinas tecnicas e suporte a operacao da frota.
 servers:
-  - url: /api/v1
-    description: Runtime de Desenvolvimento
+  - url: /engenharia-operacoes/api/v1
+    description: Entrypoint padrao no API Gateway (Gravitee).
   - url: https://api-engenharia-operacoes.hml.viafluvial.com.br/api/v1
     description: Runtime de Homologacao
   - url: https://api-engenharia-operacoes.prd.viafluvial.com.br/api/v1

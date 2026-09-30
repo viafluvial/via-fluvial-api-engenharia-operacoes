@@ -31,11 +31,13 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui/index.html
+    disable-swagger-default-url: true
     urls:
-      - name: OpenAPI Runtime
+      - name: OpenAPI (runtime - JSON)
         url: /v3/api-docs
-      - name: OpenAPI Estatico
+      - name: OpenAPI (estático - YAML)
         url: /openapi/openapi.yaml
+    urls-primary-name: OpenAPI (runtime - JSON)
 
 security:
   mode: ${SECURITY_MODE:oauth2}
