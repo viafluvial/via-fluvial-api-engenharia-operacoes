@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface HealthCheckResultRepository extends JpaRepository<HealthCheckResultEntity, UUID> {
     List<HealthCheckResultEntity> findByRunId(UUID runId);
@@ -28,5 +31,7 @@ public interface HealthCheckResultRepository extends JpaRepository<HealthCheckRe
         OffsetDateTime checkedAt,
         Pageable pageable
     );
-    void deleteByCheckedAtBefore(OffsetDateTime threshold);
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from HealthCheckResultEntity r where r.checkedAt < :threshold")
+    int deleteByCheckedAtBefore(@Param("threshold") OffsetDateTime threshold);
 }
