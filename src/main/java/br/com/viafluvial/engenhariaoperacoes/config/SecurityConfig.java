@@ -1,6 +1,7 @@
 package br.com.viafluvial.engenhariaoperacoes.config;
 
 import br.com.viafluvial.engenhariaoperacoes.common.id.CorrelationIdFilter;
+import br.com.viafluvial.engenhariaoperacoes.platformsecurity.PlatformSecurity;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -84,13 +85,19 @@ public class SecurityConfig {
                 .permitAll()
                 .anyRequest().authenticated());
 
+        Set<String> roles = securityProperties.getDev().getRoles().stream()
+            .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
+            .collect(Collectors.toSet());
+        DevTokenAuthenticationFilter headerFilter = new DevTokenAuthenticationFilter(roles);
         if ("oauth2".equalsIgnoreCase(securityProperties.getMode())) {
             http.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+            // Platform tokens verified by PlatformIdentityFilter authenticate through their trusted headers.
+            http.addFilterBefore(PlatformSecurity.verifiedOnly(headerFilter), BasicAuthenticationFilter.class);
         } else {
-            Set<String> roles = securityProperties.getDev().getRoles().stream()
-                .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
-                .collect(Collectors.toSet());
-            http.addFilterBefore(new DevTokenAuthenticationFilter(roles), BasicAuthenticationFilter.class);
+            http.addFilterBefore(
+                PlatformSecurity.headerAuthentication(securityProperties.getMode(), headerFilter),
+                BasicAuthenticationFilter.class);
+            PlatformSecurity.configureEntryPoint(http, securityProperties.getMode());
         }
 
         return http.build();

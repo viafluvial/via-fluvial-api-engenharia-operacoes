@@ -30,6 +30,13 @@ public class RestExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDetail> handleUnhandled(Exception exception, HttpServletRequest request) {
+        if (exception instanceof org.springframework.security.access.AccessDeniedException accessDenied) {
+            throw accessDenied; // Spring Security answers 401/403.
+        }
+        if (exception instanceof org.springframework.web.ErrorResponse errorResponse) {
+            // Framework errors (unknown route, method, media type, parameters) keep their own status.
+            return ResponseEntity.status(errorResponse.getStatusCode()).body(errorResponse.getBody());
+        }
         LOGGER.error("Unhandled exception for {} {}", request.getMethod(), request.getRequestURI(), exception);
         return response(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error", request, "INTERNAL_ERROR");
     }

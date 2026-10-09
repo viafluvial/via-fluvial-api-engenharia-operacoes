@@ -70,7 +70,7 @@ services:
       DB_USERNAME: ${DB_USERNAME:-<dominio>_app}
       DB_PASSWORD: ${DB_PASSWORD:-<dominio>_app}
       SECURITY_MODE: ${SECURITY_MODE:-dev}
-      CRYPTO_MASTER_KEY_BASE64: ${CRYPTO_MASTER_KEY_BASE64:-/rqlofxNe3Jq3xby9c38XcciGaax6uhKLCQ/13U/9ag=}
+      CRYPTO_MASTER_KEY_BASE64: ${CRYPTO_MASTER_KEY_BASE64:-}
     ports:
       - "8080:8080"
 
