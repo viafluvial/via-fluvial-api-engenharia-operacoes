@@ -61,6 +61,18 @@ management:
   endpoint:
     health:
       show-details: always
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+      # Chave do projeto no Coroot (header exigido pela ingestao OTLP); vazia fora de producao.
+      headers:
+        x-api-key: ${COROOT_API_KEY:}
+
+# Spans SQL (datasource-micrometer): somente consultas, sem valores de parametros.
+jdbc:
+  includes: QUERY
+  datasource-proxy:
+    include-parameter-values: false
 
 engineering:
   checks:
