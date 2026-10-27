@@ -61,6 +61,18 @@ management:
   endpoint:
     health:
       show-details: always
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+      # Chave do projeto no Coroot (header exigido pela ingestao OTLP); vazia fora de producao.
+      headers:
+        x-api-key: ${COROOT_API_KEY:}
+
+# Spans SQL (datasource-micrometer): somente consultas, sem valores de parametros.
+jdbc:
+  includes: QUERY
+  datasource-proxy:
+    include-parameter-values: false
 
 engineering:
   checks:
@@ -156,6 +168,10 @@ engineering:
         name: api-avaliacoes-experiencia
         category: Relatorios e Analytics
         local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18021/api/v1
+      - key: fretes-cargas
+        name: api-fretes-cargas
+        category: Logística e Cargas
+        local-direct-base-url: http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18022/api/v1
 
 platform:
   security:

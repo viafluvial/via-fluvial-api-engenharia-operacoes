@@ -114,6 +114,30 @@ class PlatformSecurityContractTest {
   }
 
   @Test
+  void cargoOperatorProfileCarriesBoatmanScopeFromToken() throws Exception {
+    MockHttpServletRequest request = request();
+    request.addHeader(
+        "Authorization", bearer(token(signingKey, AUDIENCE, "OPERADOR_CARGA", BOATMAN_ID)));
+    request.addHeader("X-Boatman-Id", OTHER_BOATMAN_ID);
+
+    Outcome outcome = run("platform", true, request);
+
+    assertThat(outcome.header("X-Roles")).isEqualTo("OPERADOR_CARGA");
+    assertThat(outcome.header("X-Boatman-Id")).isEqualTo(BOATMAN_ID);
+  }
+
+  @Test
+  void cargoOperatorProfileWithoutScopeLosesForgedBoatmanHeader() throws Exception {
+    MockHttpServletRequest request = request();
+    request.addHeader("Authorization", bearer(token(signingKey, AUDIENCE, "OPERADOR_CARGA", null)));
+    request.addHeader("X-Boatman-Id", OTHER_BOATMAN_ID);
+
+    Outcome outcome = run("platform", true, request);
+
+    assertThat(outcome.header("X-Boatman-Id")).isNull();
+  }
+
+  @Test
   void nonScopedProfileKeepsBoatmanSelectionParameter() throws Exception {
     MockHttpServletRequest request = request();
     request.addHeader("Authorization", bearer(token(signingKey, AUDIENCE, "ADMINISTRADOR", null)));
